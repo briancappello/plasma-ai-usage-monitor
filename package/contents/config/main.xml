@@ -51,6 +51,74 @@
         </entry>
     </group>
 
+    <group name="Subscriptions">
+        <!-- Browser Sync (experimental) -->
+        <entry name="browserSyncEnabled" type="Bool">
+            <default>false</default>
+            <label>Enable experimental browser cookie sync for real-time usage data</label>
+        </entry>
+        <entry name="browserSyncBrowser" type="Int">
+            <default>0</default>
+            <label>Browser type: 0=Firefox, 1=Chrome (not supported), 2=Chromium (not supported)</label>
+        </entry>
+        <entry name="browserSyncInterval" type="Int">
+            <default>300</default>
+            <label>Browser sync refresh interval in seconds</label>
+        </entry>
+
+        <!-- Claude Code -->
+        <entry name="claudeCodeEnabled" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="claudeCodePlan" type="Int">
+            <default>0</default>
+            <label>Plan index: 0=Pro, 1=Max 5x, 2=Max 20x</label>
+        </entry>
+        <entry name="claudeCodeCustomLimit" type="Int">
+            <default>0</default>
+            <label>Custom usage limit per 5h period (0 = use plan default)</label>
+        </entry>
+        <entry name="claudeCodeNotifications" type="Bool">
+            <default>true</default>
+        </entry>
+
+        <!-- Codex CLI -->
+        <entry name="codexEnabled" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="codexPlan" type="Int">
+            <default>0</default>
+            <label>Plan index: 0=Plus, 1=Pro, 2=Business</label>
+        </entry>
+        <entry name="codexCustomLimit" type="Int">
+            <default>0</default>
+            <label>Custom usage limit per 5h period (0 = use plan default)</label>
+        </entry>
+        <entry name="codexNotifications" type="Bool">
+            <default>true</default>
+        </entry>
+
+        <!-- GitHub Copilot -->
+        <entry name="copilotEnabled" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="copilotPlan" type="Int">
+            <default>0</default>
+            <label>Plan index: 0=Free, 1=Pro, 2=Pro+, 3=Business, 4=Enterprise</label>
+        </entry>
+        <entry name="copilotCustomLimit" type="Int">
+            <default>0</default>
+            <label>Custom monthly premium request limit (0 = use plan default)</label>
+        </entry>
+        <entry name="copilotNotifications" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="copilotOrgName" type="String">
+            <default></default>
+            <label>GitHub organization name for Copilot billing API</label>
+        </entry>
+    </group>
+
     <group name="Providers">
         <!-- OpenAI -->
         <entry name="openaiEnabled" type="Bool">
@@ -183,6 +251,81 @@
         </entry>
     </group>
 
+    <group name="Budget">
+        <!-- Budget values are stored in cents (integer) to avoid floating-point issues.
+             e.g. 1050 = $10.50. The SpinBox in configBudget.qml works in cents natively. -->
+        <entry name="openaiDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="openaiMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="anthropicDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="anthropicMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="googleDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="googleMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="mistralDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="mistralMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="deepseekDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="deepseekMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="groqDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="groqMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="xaiDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="xaiMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="openrouterDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="openrouterMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="togetherDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="togetherMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="cohereDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="cohereMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="googleveoDailyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="googleveoMonthlyBudget" type="Int">
+            <default>0</default>
+        </entry>
+        <entry name="budgetWarningPercent" type="Int">
+            <default>80</default>
+            <label>Percentage of budget to trigger a warning</label>
+        </entry>
+    </group>
+
     <group name="Alerts">
         <entry name="alertsEnabled" type="Bool">
             <default>true</default>
@@ -266,81 +409,6 @@
         </entry>
     </group>
 
-    <group name="Budget">
-        <!-- Budget values are stored in cents (integer) to avoid floating-point issues.
-             e.g. 1050 = $10.50. The SpinBox in configBudget.qml works in cents natively. -->
-        <entry name="openaiDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="openaiMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="anthropicDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="anthropicMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="googleDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="googleMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="mistralDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="mistralMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="deepseekDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="deepseekMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="groqDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="groqMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="xaiDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="xaiMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="openrouterDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="openrouterMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="togetherDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="togetherMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="cohereDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="cohereMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="googleveoDailyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="googleveoMonthlyBudget" type="Int">
-            <default>0</default>
-        </entry>
-        <entry name="budgetWarningPercent" type="Int">
-            <default>80</default>
-            <label>Percentage of budget to trigger a warning</label>
-        </entry>
-    </group>
-
     <group name="History">
         <entry name="historyEnabled" type="Bool">
             <default>true</default>
@@ -351,71 +419,4 @@
         </entry>
     </group>
 
-    <group name="Subscriptions">
-        <!-- Browser Sync (experimental) -->
-        <entry name="browserSyncEnabled" type="Bool">
-            <default>false</default>
-            <label>Enable experimental browser cookie sync for real-time usage data</label>
-        </entry>
-        <entry name="browserSyncBrowser" type="Int">
-            <default>0</default>
-            <label>Browser type: 0=Firefox, 1=Chrome (not supported), 2=Chromium (not supported)</label>
-        </entry>
-        <entry name="browserSyncInterval" type="Int">
-            <default>300</default>
-            <label>Browser sync refresh interval in seconds</label>
-        </entry>
-
-        <!-- Claude Code -->
-        <entry name="claudeCodeEnabled" type="Bool">
-            <default>false</default>
-        </entry>
-        <entry name="claudeCodePlan" type="Int">
-            <default>0</default>
-            <label>Plan index: 0=Pro, 1=Max 5x, 2=Max 20x</label>
-        </entry>
-        <entry name="claudeCodeCustomLimit" type="Int">
-            <default>0</default>
-            <label>Custom usage limit per 5h period (0 = use plan default)</label>
-        </entry>
-        <entry name="claudeCodeNotifications" type="Bool">
-            <default>true</default>
-        </entry>
-
-        <!-- Codex CLI -->
-        <entry name="codexEnabled" type="Bool">
-            <default>false</default>
-        </entry>
-        <entry name="codexPlan" type="Int">
-            <default>0</default>
-            <label>Plan index: 0=Plus, 1=Pro, 2=Business</label>
-        </entry>
-        <entry name="codexCustomLimit" type="Int">
-            <default>0</default>
-            <label>Custom usage limit per 5h period (0 = use plan default)</label>
-        </entry>
-        <entry name="codexNotifications" type="Bool">
-            <default>true</default>
-        </entry>
-
-        <!-- GitHub Copilot -->
-        <entry name="copilotEnabled" type="Bool">
-            <default>false</default>
-        </entry>
-        <entry name="copilotPlan" type="Int">
-            <default>0</default>
-            <label>Plan index: 0=Free, 1=Pro, 2=Pro+, 3=Business, 4=Enterprise</label>
-        </entry>
-        <entry name="copilotCustomLimit" type="Int">
-            <default>0</default>
-            <label>Custom monthly premium request limit (0 = use plan default)</label>
-        </entry>
-        <entry name="copilotNotifications" type="Bool">
-            <default>true</default>
-        </entry>
-        <entry name="copilotOrgName" type="String">
-            <default></default>
-            <label>GitHub organization name for Copilot billing API</label>
-        </entry>
-    </group>
 </kcfg>

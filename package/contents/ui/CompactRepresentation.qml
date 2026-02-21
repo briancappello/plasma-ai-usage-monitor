@@ -64,7 +64,7 @@ MouseArea {
     readonly property string displayMode: plasmoid.configuration.compactDisplayMode
 
     // In chart mode the widget requests twice its height as width
-    Layout.preferredWidth: displayMode === "chart" ? height * 2 : -1
+    Layout.preferredWidth: displayMode === "chart" ? height * 3 : -1
 
     hoverEnabled: true
     onClicked: plasmoid.activated()
@@ -158,91 +158,95 @@ MouseArea {
             onTriggered: countdownLabel.updateText()
         }
 
-        ColumnLayout {
-            anchors {
-                fill: parent
-                leftMargin: Kirigami.Units.smallSpacing
-                rightMargin: Kirigami.Units.smallSpacing
-                topMargin: Math.round(Kirigami.Units.smallSpacing * 0.5)
-            }
-            spacing: Math.round(Kirigami.Units.smallSpacing * 0.5)
+        // Countdown label — anchored to the bottom, matching the Digital Clock's
+        // date string row in both size and vertical position
+        PlasmaComponents.Label {
+            id: countdownLabel
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: Kirigami.Units.smallSpacing
+            anchors.rightMargin: Kirigami.Units.smallSpacing
+            // Explicit height: one line at the default font size, scaled by DPI.
+            // This must be a stable non-zero value so the bar above can anchor to it.
+            height: Kirigami.Theme.defaultFont.pixelSize
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            // Use the same unstyled default font the clock's date string uses
+            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+            font.weight: Kirigami.Theme.defaultFont.weight
+            text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
 
-            // Usage bar
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                // Track background
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                    color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
-                }
-
-                // Filled portion
-                Rectangle {
-                    id: usageFill
-                    readonly property double pct: chartMode.ccAvailable
-                        ? Math.min(1.0, (chartMode.ccMonitor.sessionPercentUsed > 0
-                            ? chartMode.ccMonitor.sessionPercentUsed / 100.0
-                            : chartMode.ccMonitor.percentUsed / 100.0))
-                        : 0.0
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: parent.width * pct
-                    radius: height / 2
-                    color: {
-                        var p = pct * 100;
-                        if (p >= plasmoid.configuration.criticalThreshold)
-                            return Kirigami.Theme.negativeTextColor;
-                        if (p >= plasmoid.configuration.warningThreshold)
-                            return Kirigami.Theme.neutralTextColor;
-                        return Kirigami.Theme.positiveTextColor;
-                    }
-                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-                    Behavior on color { ColorAnimation { duration: 300 } }
-                }
-
-                // "not available" placeholder bar
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                    color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
-                    visible: !chartMode.ccAvailable
-                }
+            function formatCountdown() {
+                var secs = chartMode.ccMonitor.secondsUntilReset;
+                if (secs <= 0) return i18n("reset");
+                var h = Math.floor(secs / 3600);
+                var m = Math.floor((secs % 3600) / 60);
+                var s = secs % 60;
+                if (h > 0)
+                    return h + "h " + (m < 10 ? "0" : "") + m + "m";
+                return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
             }
 
-            // Countdown label
-            PlasmaComponents.Label {
-                id: countdownLabel
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                minimumPointSize: 5
-                fontSizeMode: Text.HorizontalFit
-                opacity: 0.75
-                text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
+            function updateText() {
+                text = chartMode.ccAvailable ? formatCountdown() : i18n("–");
+            }
 
-                function formatCountdown() {
-                    var secs = chartMode.ccMonitor.secondsUntilReset;
-                    if (secs <= 0) return i18n("reset");
-                    var h = Math.floor(secs / 3600);
-                    var m = Math.floor((secs % 3600) / 60);
-                    var s = secs % 60;
-                    if (h > 0)
-                        return h + "h " + (m < 10 ? "0" : "") + m + "m";
-                    return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
-                }
+            Connections {
+                target: chartMode.ccMonitor ?? null
+                function onUsageUpdated() { countdownLabel.updateText(); }
+            }
+        }
 
-                function updateText() {
-                    text = chartMode.ccAvailable ? formatCountdown() : i18n("–");
-                }
+        // Usage bar — fills the space above the countdown label
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: countdownLabel.top
+            anchors.leftMargin: Kirigami.Units.smallSpacing
+            anchors.rightMargin: Kirigami.Units.smallSpacing
+            anchors.topMargin: 1
+            anchors.bottomMargin: 5
 
-                Connections {
-                    target: chartMode.ccMonitor ?? null
-                    function onUsageUpdated() { countdownLabel.updateText(); }
+            // Track background
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+            }
+
+            // Filled portion
+            Rectangle {
+                id: usageFill
+                readonly property double pct: chartMode.ccAvailable
+                    ? Math.min(1.0, (chartMode.ccMonitor.sessionPercentUsed > 0
+                        ? chartMode.ccMonitor.sessionPercentUsed / 100.0
+                        : chartMode.ccMonitor.percentUsed / 100.0))
+                    : 0.0
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: parent.width * pct
+                radius: height / 2
+                color: {
+                    var p = pct * 100;
+                    if (p >= plasmoid.configuration.criticalThreshold)
+                        return Kirigami.Theme.negativeTextColor;
+                    if (p >= plasmoid.configuration.warningThreshold)
+                        return Kirigami.Theme.neutralTextColor;
+                    return Kirigami.Theme.positiveTextColor;
                 }
+                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+                Behavior on color { ColorAnimation { duration: 300 } }
+            }
+
+            // "not available" placeholder
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
+                visible: !chartMode.ccAvailable
             }
         }
     }
