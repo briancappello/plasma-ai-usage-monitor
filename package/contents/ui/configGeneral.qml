@@ -20,241 +20,232 @@ KCM.SimpleKCM {
     property alias cfg_xaiRefreshInterval: xaiRefreshSlider.value
     property alias cfg_googleveoRefreshInterval: googleveoRefreshSlider.value
 
-    Kirigami.FormLayout {
+    readonly property int labelWidth: Kirigami.Units.gridUnit * 12
+
+    ColumnLayout {
         anchors.fill: parent
+        spacing: Kirigami.Units.smallSpacing
 
         // ── Global Refresh Interval ──
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Default refresh interval:")
+        Kirigami.Separator { Layout.fillWidth: true }
+        QQC2.Label { text: i18n("Refresh"); font.bold: true }
+
+        RowLayout {
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Slider {
-                id: refreshSlider
-                Layout.fillWidth: true
-                from: 60
-                to: 1800
-                stepSize: 60
-                value: plasmoid.configuration.refreshInterval
-                QQC2.ToolTip.text: i18n("How often to poll provider APIs for updated data (60s–30min)")
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.delay: 500
-            }
-
             QQC2.Label {
-                text: formatInterval(refreshSlider.value)
-                opacity: 0.7
-                Layout.alignment: Qt.AlignHCenter
+                text: i18n("Default refresh interval:")
+                Layout.preferredWidth: generalPage.labelWidth
+                wrapMode: Text.WordWrap
             }
-        }
-
-        Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Panel Display")
-        }
-
-        QQC2.ComboBox {
-            id: compactModeCombo
-            Kirigami.FormData.label: i18n("Show in panel:")
-            model: [
-                i18n("Icon only"),
-                i18n("Total cost"),
-                i18n("Active providers count")
-            ]
-            QQC2.ToolTip.text: i18n("Choose what to display next to the icon in the system panel")
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.delay: 500
-            currentIndex: {
-                switch (generalPage.cfg_compactDisplayMode) {
-                    case "cost": return 1;
-                    case "count": return 2;
-                    default: return 0;
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                QQC2.Slider {
+                    id: refreshSlider
+                    Layout.fillWidth: true
+                    from: 60; to: 1800; stepSize: 60
+                    value: plasmoid.configuration.refreshInterval
+                    QQC2.ToolTip.text: i18n("How often to poll provider APIs for updated data (60s–30min)")
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.delay: 500
+                }
+                QQC2.Label {
+                    text: formatInterval(refreshSlider.value)
+                    opacity: 0.7
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
                 }
             }
-            onCurrentIndexChanged: {
-                switch (currentIndex) {
-                    case 1: generalPage.cfg_compactDisplayMode = "cost"; break;
-                    case 2: generalPage.cfg_compactDisplayMode = "count"; break;
-                    default: generalPage.cfg_compactDisplayMode = "icon"; break;
+        }
+
+        // ── Panel Display ──
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("Panel Display"); font.bold: true }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Show in panel:")
+                Layout.preferredWidth: generalPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: compactModeCombo
+                Layout.fillWidth: true
+                model: [i18n("Icon only"), i18n("Total cost"), i18n("Active providers count"), i18n("Claude Code chart")]
+                QQC2.ToolTip.text: i18n("Choose what to display next to the icon in the system panel")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: 500
+                currentIndex: {
+                    switch (generalPage.cfg_compactDisplayMode) {
+                        case "cost": return 1;
+                        case "count": return 2;
+                        case "chart": return 3;
+                        default: return 0;
+                    }
+                }
+                onCurrentIndexChanged: {
+                    switch (currentIndex) {
+                        case 1: generalPage.cfg_compactDisplayMode = "cost"; break;
+                        case 2: generalPage.cfg_compactDisplayMode = "count"; break;
+                        case 3: generalPage.cfg_compactDisplayMode = "chart"; break;
+                        default: generalPage.cfg_compactDisplayMode = "icon"; break;
+                    }
                 }
             }
         }
 
         // ── Per-Provider Refresh Intervals ──
-        Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Per-Provider Refresh Intervals")
-        }
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("Per-Provider Refresh Intervals"); font.bold: true }
 
         QQC2.Label {
+            Layout.fillWidth: true
             text: i18n("Set to 0 to use the default interval above. Otherwise, each provider refreshes on its own schedule.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             opacity: 0.6
             wrapMode: Text.WordWrap
+        }
+
+        // Helper component for each provider slider row
+        component ProviderSliderRow: RowLayout {
+            property string labelText: ""
+            property alias sliderItem: sliderLoader.item
             Layout.fillWidth: true
-        }
-
-        // OpenAI
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("OpenAI:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: openaiRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.openaiRefreshInterval
-            }
+            spacing: Kirigami.Units.smallSpacing
             QQC2.Label {
-                text: openaiRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(openaiRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+                text: labelText
+                Layout.preferredWidth: generalPage.labelWidth
             }
-        }
-
-        // Anthropic
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Anthropic:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: anthropicRefreshSlider
+            ColumnLayout {
                 Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.anthropicRefreshInterval
-            }
-            QQC2.Label {
-                text: anthropicRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(anthropicRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+                spacing: 2
+                Loader { id: sliderLoader }
+                QQC2.Label {
+                    text: sliderLoader.item
+                        ? (sliderLoader.item.value === 0 ? i18n("Use default") : formatInterval(sliderLoader.item.value))
+                        : ""
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    opacity: 0.7
+                }
             }
         }
 
-        // Google
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Google Gemini:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: googleRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.googleRefreshInterval
-            }
-            QQC2.Label {
-                text: googleRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(googleRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("OpenAI:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: openaiRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.openaiRefreshInterval }
+                QQC2.Label { text: openaiRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(openaiRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
-        // Mistral
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Mistral AI:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: mistralRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.mistralRefreshInterval
-            }
-            QQC2.Label {
-                text: mistralRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(mistralRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Anthropic:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: anthropicRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.anthropicRefreshInterval }
+                QQC2.Label { text: anthropicRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(anthropicRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
-        // DeepSeek
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("DeepSeek:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: deepseekRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.deepseekRefreshInterval
-            }
-            QQC2.Label {
-                text: deepseekRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(deepseekRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Google Gemini:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: googleRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.googleRefreshInterval }
+                QQC2.Label { text: googleRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(googleRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
-        // Groq
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Groq:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: groqRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.groqRefreshInterval
-            }
-            QQC2.Label {
-                text: groqRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(groqRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Mistral AI:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: mistralRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.mistralRefreshInterval }
+                QQC2.Label { text: mistralRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(mistralRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
-        // xAI
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("xAI / Grok:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: xaiRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.xaiRefreshInterval
-            }
-            QQC2.Label {
-                text: xaiRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(xaiRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("DeepSeek:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: deepseekRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.deepseekRefreshInterval }
+                QQC2.Label { text: deepseekRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(deepseekRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
-        ColumnLayout {
-            Kirigami.FormData.label: i18n("Google Veo:")
-            spacing: 2
-
-            QQC2.Slider {
-                id: googleveoRefreshSlider
-                Layout.fillWidth: true
-                from: 0; to: 1800; stepSize: 60
-                value: plasmoid.configuration.googleveoRefreshInterval
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Groq:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: groqRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.groqRefreshInterval }
+                QQC2.Label { text: groqRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(groqRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
-            QQC2.Label {
-                text: googleveoRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(googleveoRefreshSlider.value)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.7; Layout.alignment: Qt.AlignHCenter
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("xAI / Grok:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: xaiRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.xaiRefreshInterval }
+                QQC2.Label { text: xaiRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(xaiRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Google Veo:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: googleveoRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.googleveoRefreshInterval }
+                QQC2.Label { text: googleveoRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(googleveoRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
             }
         }
 
         // ── About ──
-        Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("About")
-        }
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("About"); font.bold: true }
 
-        QQC2.Label {
-            Kirigami.FormData.label: i18n("Version:")
-            text: (plasmoid.metaData && plasmoid.metaData.version)
-                  ? plasmoid.metaData.version
-                  : AppInfo.version
-        }
-
-        QQC2.Label {
-            Kirigami.FormData.label: i18n("Description:")
-            text: i18n("Monitor AI API token usage, rate limits, costs, and budgets across multiple providers")
-            wrapMode: Text.WordWrap
+        RowLayout {
             Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Version:"); Layout.preferredWidth: generalPage.labelWidth }
+            QQC2.Label {
+                text: (plasmoid.metaData && plasmoid.metaData.version)
+                      ? plasmoid.metaData.version
+                      : AppInfo.version
+            }
         }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Description:"); Layout.preferredWidth: generalPage.labelWidth }
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: i18n("Monitor AI API token usage, rate limits, costs, and budgets across multiple providers")
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        Item { Layout.fillHeight: true }
     }
 
     function formatInterval(secs) {

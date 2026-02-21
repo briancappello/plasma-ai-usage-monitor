@@ -12,7 +12,7 @@
         </entry>
         <entry name="compactDisplayMode" type="String">
             <default>icon</default>
-            <label>What to show in compact mode: icon, cost, count</label>
+            <label>What to show in compact mode: icon, cost, count, chart</label>
         </entry>
 
         <!-- Per-provider refresh intervals (0 = use global default) -->

@@ -51,6 +51,9 @@ cmake -S "$PROJECT_DIR" -B "$BUILD_DIR" \
 
 cmake --build "$BUILD_DIR" --parallel "$(nproc)"
 
+# Clear Cache
+rm -rf ~/.cache/plasma* ~/.cache/qmlcache
+
 # Install
 echo ""
 echo "Installing (requires sudo)..."

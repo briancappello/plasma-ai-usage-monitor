@@ -121,8 +121,12 @@ KCM.SimpleKCM {
         saveCopilotToken();
     }
 
-    Kirigami.FormLayout {
+    // Reusable label width so all rows align
+    readonly property int labelWidth: Kirigami.Units.gridUnit * 10
+
+    ColumnLayout {
         anchors.fill: parent
+        spacing: Kirigami.Units.smallSpacing
 
         // ── Description ──
         QQC2.Label {
@@ -140,20 +144,26 @@ KCM.SimpleKCM {
         // ══════════════════════════════════════════════
 
         Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Claude Code")
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            text: i18n("Claude Code")
+            font.bold: true
         }
 
+        // Enable row
         RowLayout {
-            Kirigami.FormData.label: i18n("Enable:")
-            spacing: Kirigami.Units.largeSpacing
-
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Enable:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.Switch {
                 id: claudeCodeSwitch
                 checked: plasmoid.configuration.claudeCodeEnabled
             }
-
-            // Detection status
             QQC2.Label {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -167,39 +177,48 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.ComboBox {
-            id: claudeCodePlanCombo
-            Kirigami.FormData.label: i18n("Plan:")
-            enabled: claudeCodeSwitch.checked
+        // Plan row
+        RowLayout {
             Layout.fillWidth: true
-            model: claudeDetector.availablePlans()
-            currentIndex: plasmoid.configuration.claudeCodePlan
-            onCurrentIndexChanged: {
-                // Auto-fill default limit when plan changes
-                var plans = claudeDetector.availablePlans();
-                if (currentIndex >= 0 && currentIndex < plans.length) {
-                    var def = claudeDetector.defaultLimitForPlan(plans[currentIndex]);
-                    if (claudeCodeLimitSpin.value === 0 || !claudeCodeLimitOverride.checked) {
-                        claudeCodeLimitSpin.value = def;
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Plan:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: claudeCodePlanCombo
+                enabled: claudeCodeSwitch.checked
+                Layout.fillWidth: true
+                model: claudeDetector.availablePlans()
+                currentIndex: plasmoid.configuration.claudeCodePlan
+                onCurrentIndexChanged: {
+                    var plans = claudeDetector.availablePlans();
+                    if (currentIndex >= 0 && currentIndex < plans.length) {
+                        var def = claudeDetector.defaultLimitForPlan(plans[currentIndex]);
+                        if (claudeCodeLimitSpin.value === 0 || !claudeCodeLimitOverride.checked) {
+                            claudeCodeLimitSpin.value = def;
+                        }
                     }
                 }
             }
         }
 
+        // Usage limit row
         RowLayout {
-            Kirigami.FormData.label: i18n("Usage limit (per 5h):")
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("Usage limit (per 5h):")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+                wrapMode: Text.WordWrap
+            }
             QQC2.SpinBox {
                 id: claudeCodeLimitSpin
                 enabled: claudeCodeSwitch.checked
-                from: 0
-                to: 99999
+                from: 0; to: 99999
                 value: plasmoid.configuration.claudeCodeCustomLimit
                 editable: true
-
                 Component.onCompleted: {
-                    // Set default from plan if not custom
                     if (value === 0) {
                         var plans = claudeDetector.availablePlans();
                         var idx = claudeCodePlanCombo.currentIndex;
@@ -209,7 +228,6 @@ KCM.SimpleKCM {
                     }
                 }
             }
-
             QQC2.CheckBox {
                 id: claudeCodeLimitOverride
                 text: i18n("Custom")
@@ -219,19 +237,27 @@ KCM.SimpleKCM {
 
         QQC2.Label {
             visible: claudeCodeSwitch.checked
+            Layout.fillWidth: true
             text: i18n("Claude Code also has a weekly rolling limit. The secondary limit "
                      + "is automatically calculated from the plan tier.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             opacity: 0.6
             wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
 
-        QQC2.Switch {
-            id: claudeCodeNotifySwitch
-            Kirigami.FormData.label: i18n("Notifications:")
-            enabled: claudeCodeSwitch.checked
-            checked: plasmoid.configuration.claudeCodeNotifications
+        // Notifications row
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Notifications:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.Switch {
+                id: claudeCodeNotifySwitch
+                enabled: claudeCodeSwitch.checked
+                checked: plasmoid.configuration.claudeCodeNotifications
+            }
         }
 
         // ══════════════════════════════════════════════
@@ -239,19 +265,25 @@ KCM.SimpleKCM {
         // ══════════════════════════════════════════════
 
         Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Codex CLI")
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            text: i18n("Codex CLI")
+            font.bold: true
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Enable:")
-            spacing: Kirigami.Units.largeSpacing
-
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Enable:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.Switch {
                 id: codexSwitch
                 checked: plasmoid.configuration.codexEnabled
             }
-
             QQC2.Label {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -265,36 +297,45 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.ComboBox {
-            id: codexPlanCombo
-            Kirigami.FormData.label: i18n("Plan:")
-            enabled: codexSwitch.checked
+        RowLayout {
             Layout.fillWidth: true
-            model: codexDetector.availablePlans()
-            currentIndex: plasmoid.configuration.codexPlan
-            onCurrentIndexChanged: {
-                var plans = codexDetector.availablePlans();
-                if (currentIndex >= 0 && currentIndex < plans.length) {
-                    var def = codexDetector.defaultLimitForPlan(plans[currentIndex]);
-                    if (codexLimitSpin.value === 0 || !codexLimitOverride.checked) {
-                        codexLimitSpin.value = def;
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Plan:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: codexPlanCombo
+                enabled: codexSwitch.checked
+                Layout.fillWidth: true
+                model: codexDetector.availablePlans()
+                currentIndex: plasmoid.configuration.codexPlan
+                onCurrentIndexChanged: {
+                    var plans = codexDetector.availablePlans();
+                    if (currentIndex >= 0 && currentIndex < plans.length) {
+                        var def = codexDetector.defaultLimitForPlan(plans[currentIndex]);
+                        if (codexLimitSpin.value === 0 || !codexLimitOverride.checked) {
+                            codexLimitSpin.value = def;
+                        }
                     }
                 }
             }
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Usage limit (per 5h):")
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("Usage limit (per 5h):")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+                wrapMode: Text.WordWrap
+            }
             QQC2.SpinBox {
                 id: codexLimitSpin
                 enabled: codexSwitch.checked
-                from: 0
-                to: 99999
+                from: 0; to: 99999
                 value: plasmoid.configuration.codexCustomLimit
                 editable: true
-
                 Component.onCompleted: {
                     if (value === 0) {
                         var plans = codexDetector.availablePlans();
@@ -305,7 +346,6 @@ KCM.SimpleKCM {
                     }
                 }
             }
-
             QQC2.CheckBox {
                 id: codexLimitOverride
                 text: i18n("Custom")
@@ -313,11 +353,18 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.Switch {
-            id: codexNotifySwitch
-            Kirigami.FormData.label: i18n("Notifications:")
-            enabled: codexSwitch.checked
-            checked: plasmoid.configuration.codexNotifications
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Notifications:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.Switch {
+                id: codexNotifySwitch
+                enabled: codexSwitch.checked
+                checked: plasmoid.configuration.codexNotifications
+            }
         }
 
         // ══════════════════════════════════════════════
@@ -325,19 +372,25 @@ KCM.SimpleKCM {
         // ══════════════════════════════════════════════
 
         Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("GitHub Copilot")
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            text: i18n("GitHub Copilot")
+            font.bold: true
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Enable:")
-            spacing: Kirigami.Units.largeSpacing
-
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Enable:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.Switch {
                 id: copilotSwitch
                 checked: plasmoid.configuration.copilotEnabled
             }
-
             QQC2.Label {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -351,36 +404,45 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.ComboBox {
-            id: copilotPlanCombo
-            Kirigami.FormData.label: i18n("Plan:")
-            enabled: copilotSwitch.checked
+        RowLayout {
             Layout.fillWidth: true
-            model: copilotDetector.availablePlans()
-            currentIndex: plasmoid.configuration.copilotPlan
-            onCurrentIndexChanged: {
-                var plans = copilotDetector.availablePlans();
-                if (currentIndex >= 0 && currentIndex < plans.length) {
-                    var def = copilotDetector.defaultLimitForPlan(plans[currentIndex]);
-                    if (copilotLimitSpin.value === 0 || !copilotLimitOverride.checked) {
-                        copilotLimitSpin.value = def;
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Plan:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: copilotPlanCombo
+                enabled: copilotSwitch.checked
+                Layout.fillWidth: true
+                model: copilotDetector.availablePlans()
+                currentIndex: plasmoid.configuration.copilotPlan
+                onCurrentIndexChanged: {
+                    var plans = copilotDetector.availablePlans();
+                    if (currentIndex >= 0 && currentIndex < plans.length) {
+                        var def = copilotDetector.defaultLimitForPlan(plans[currentIndex]);
+                        if (copilotLimitSpin.value === 0 || !copilotLimitOverride.checked) {
+                            copilotLimitSpin.value = def;
+                        }
                     }
                 }
             }
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Premium requests (monthly):")
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("Premium requests (monthly):")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+                wrapMode: Text.WordWrap
+            }
             QQC2.SpinBox {
                 id: copilotLimitSpin
                 enabled: copilotSwitch.checked
-                from: 0
-                to: 99999
+                from: 0; to: 99999
                 value: plasmoid.configuration.copilotCustomLimit
                 editable: true
-
                 Component.onCompleted: {
                     if (value === 0) {
                         var plans = copilotDetector.availablePlans();
@@ -391,7 +453,6 @@ KCM.SimpleKCM {
                     }
                 }
             }
-
             QQC2.CheckBox {
                 id: copilotLimitOverride
                 text: i18n("Custom")
@@ -399,36 +460,50 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.Switch {
-            id: copilotNotifySwitch
-            Kirigami.FormData.label: i18n("Notifications:")
-            enabled: copilotSwitch.checked
-            checked: plasmoid.configuration.copilotNotifications
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Notifications:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.Switch {
+                id: copilotNotifySwitch
+                enabled: copilotSwitch.checked
+                checked: plasmoid.configuration.copilotNotifications
+            }
         }
 
         // ── Optional GitHub API integration ──
         Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("GitHub API (Optional)")
             visible: copilotSwitch.checked
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            visible: copilotSwitch.checked
+            text: i18n("GitHub API (Optional)")
+            font.bold: true
         }
 
         QQC2.Label {
             visible: copilotSwitch.checked
+            Layout.fillWidth: true
             text: i18n("Provide a GitHub Personal Access Token to fetch organization-level "
                      + "Copilot seat metrics. Requires 'manage_billing:copilot' scope.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             opacity: 0.6
             wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("GitHub Token:")
             visible: copilotSwitch.checked
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("GitHub Token:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.TextField {
                 id: copilotTokenField
                 enabled: copilotSwitch.checked
@@ -437,7 +512,6 @@ KCM.SimpleKCM {
                 Layout.fillWidth: true
                 onTextEdited: subscriptionsPage.copilotTokenDirty = true
             }
-
             QQC2.ToolButton {
                 id: copilotTokenVisible
                 checkable: true; checked: false
@@ -446,7 +520,6 @@ KCM.SimpleKCM {
                 QQC2.ToolTip.text: checked ? i18n("Hide token") : i18n("Show token")
                 QQC2.ToolTip.visible: hovered
             }
-
             QQC2.ToolButton {
                 icon.name: "edit-clear"
                 enabled: copilotTokenField.text.length > 0
@@ -456,14 +529,21 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.TextField {
-            id: copilotOrgField
-            Kirigami.FormData.label: i18n("Organization:")
+        RowLayout {
             visible: copilotSwitch.checked
-            enabled: copilotSwitch.checked
-            text: plasmoid.configuration.copilotOrgName
-            placeholderText: i18n("my-org-name")
             Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Organization:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.TextField {
+                id: copilotOrgField
+                enabled: copilotSwitch.checked
+                text: plasmoid.configuration.copilotOrgName
+                placeholderText: i18n("my-org-name")
+                Layout.fillWidth: true
+            }
         }
 
         // ══════════════════════════════════════════════
@@ -471,8 +551,12 @@ KCM.SimpleKCM {
         // ══════════════════════════════════════════════
 
         Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Browser Sync (Experimental)")
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            text: i18n("Browser Sync (Experimental)")
+            font.bold: true
         }
 
         QQC2.Label {
@@ -509,14 +593,16 @@ KCM.SimpleKCM {
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Enable sync:")
-            spacing: Kirigami.Units.largeSpacing
-
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Enable sync:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.Switch {
                 id: browserSyncSwitch
                 checked: plasmoid.configuration.browserSyncEnabled
             }
-
             QQC2.Label {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -530,28 +616,35 @@ KCM.SimpleKCM {
             }
         }
 
-        QQC2.ComboBox {
-            id: browserSyncBrowserCombo
-            Kirigami.FormData.label: i18n("Browser:")
-            enabled: browserSyncSwitch.checked
+        RowLayout {
             Layout.fillWidth: true
-            model: [i18n("Firefox"), i18n("Chrome (not yet supported)"), i18n("Chromium (not yet supported)")]
-            currentIndex: plasmoid.configuration.browserSyncBrowser
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Browser:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: browserSyncBrowserCombo
+                enabled: browserSyncSwitch.checked
+                Layout.fillWidth: true
+                model: [i18n("Firefox"), i18n("Chrome (not yet supported)"), i18n("Chromium (not yet supported)")]
+                currentIndex: plasmoid.configuration.browserSyncBrowser
+            }
         }
 
         RowLayout {
-            Kirigami.FormData.label: i18n("Sync interval:")
+            Layout.fillWidth: true
             enabled: browserSyncSwitch.checked
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("Sync interval:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.SpinBox {
                 id: browserSyncIntervalSpin
-                from: 60
-                to: 3600
-                stepSize: 60
+                from: 60; to: 3600; stepSize: 60
                 value: plasmoid.configuration.browserSyncInterval
                 editable: true
-
                 textFromValue: function(value, locale) {
                     return Math.floor(value / 60) + " min";
                 }
@@ -559,7 +652,6 @@ KCM.SimpleKCM {
                     return parseInt(text) * 60;
                 }
             }
-
             QQC2.Label {
                 text: i18n("(minimum 60 seconds)")
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -571,10 +663,13 @@ KCM.SimpleKCM {
 
         // Connection test
         RowLayout {
-            Kirigami.FormData.label: i18n("Connection test:")
             visible: browserSyncSwitch.checked
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            QQC2.Label {
+                text: i18n("Connection test:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
             QQC2.Button {
                 text: i18n("Test Claude.ai")
                 icon.name: "network-connect"
@@ -596,26 +691,20 @@ KCM.SimpleKCM {
             }
         }
 
-        RowLayout {
-            Kirigami.FormData.label: " "
-            visible: browserSyncSwitch.checked && claudeGuidanceLabel.visible
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Label {
-                id: claudeGuidanceLabel
-                visible: false
-                wrapMode: Text.WordWrap
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.75
-                Layout.fillWidth: true
-            }
+        QQC2.Label {
+            id: claudeGuidanceLabel
+            visible: false
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            opacity: 0.75
         }
 
         RowLayout {
-            Kirigami.FormData.label: " "
             visible: browserSyncSwitch.checked
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
-
+            Item { Layout.preferredWidth: subscriptionsPage.labelWidth }
             QQC2.Button {
                 text: i18n("Test ChatGPT")
                 icon.name: "network-connect"
@@ -637,21 +726,18 @@ KCM.SimpleKCM {
             }
         }
 
-        RowLayout {
-            Kirigami.FormData.label: " "
-            visible: browserSyncSwitch.checked && chatgptGuidanceLabel.visible
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Label {
-                id: chatgptGuidanceLabel
-                visible: false
-                wrapMode: Text.WordWrap
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                opacity: 0.75
-                Layout.fillWidth: true
-            }
+        QQC2.Label {
+            id: chatgptGuidanceLabel
+            visible: false
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            opacity: 0.75
         }
-    }
+
+        Item { Layout.fillHeight: true }
+
+    }  // ColumnLayout
 
     // ── BrowserCookieExtractor for config page ──
     BrowserCookieExtractor {
