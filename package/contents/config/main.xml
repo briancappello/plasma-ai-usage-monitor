@@ -400,7 +400,7 @@
 
         <!-- Update notifications -->
         <entry name="notifyOnUpdate" type="Bool">
-            <default>true</default>
+            <default>false</default>
             <label>Show notification when a new version is available</label>
         </entry>
         <entry name="updateCheckInterval" type="Int">
