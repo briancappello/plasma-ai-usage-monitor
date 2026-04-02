@@ -46,6 +46,7 @@ PlasmoidItem {
 
     // Subscription tool monitors
     property alias claudeCode: claudeCodeMonitor
+    property alias openCode: openCodeMonitor
     property alias codexCli: codexCliMonitor
     property alias copilot: copilotMonitor
 
@@ -217,6 +218,34 @@ PlasmoidItem {
         }
         onUsageUpdated: {
             recordToolUsageSnapshot(claudeCodeMonitor);
+        }
+    }
+
+    OpenCodeMonitor {
+        id: openCodeMonitor
+        enabled: plasmoid.configuration.openCodeEnabled
+        usageLimit: plasmoid.configuration.openCodeCustomLimit
+
+        Component.onCompleted: {
+            checkToolInstalled();
+            syncEnabled = Qt.binding(function() { return plasmoid.configuration.browserSyncEnabled; });
+            var plans = availablePlans();
+            var idx = plasmoid.configuration.openCodePlan;
+            if (idx >= 0 && idx < plans.length) {
+                planTier = plans[idx];
+                if (usageLimit === 0) usageLimit = defaultLimitForPlan(plans[idx]);
+                if (hasSecondaryLimit) secondaryUsageLimit = defaultSecondaryLimitForPlan(plans[idx]);
+            }
+        }
+
+        onLimitWarning: function(tool, percent) {
+            handleToolLimitWarning(tool, percent);
+        }
+        onLimitReached: function(tool) {
+            handleToolLimitReached(tool);
+        }
+        onUsageUpdated: {
+            recordToolUsageSnapshot(openCodeMonitor);
         }
     }
 
@@ -509,6 +538,7 @@ PlasmoidItem {
 
     readonly property var allSubscriptionTools: [
         { name: "Claude Code", monitor: claudeCodeMonitor, enabled: plasmoid.configuration.claudeCodeEnabled, notify: plasmoid.configuration.claudeCodeNotifications },
+        { name: "OpenCode", monitor: openCodeMonitor, enabled: plasmoid.configuration.openCodeEnabled, notify: plasmoid.configuration.openCodeNotifications },
         { name: "Codex CLI", monitor: codexCliMonitor, enabled: plasmoid.configuration.codexEnabled, notify: plasmoid.configuration.codexNotifications },
         { name: "GitHub Copilot", monitor: copilotMonitor, enabled: plasmoid.configuration.copilotEnabled, notify: plasmoid.configuration.copilotNotifications }
     ]
@@ -783,6 +813,14 @@ PlasmoidItem {
             }
         }
 
+        // Sync OpenCode (claude.ai cookies — same subscription)
+        if (plasmoid.configuration.openCodeEnabled && openCodeMonitor.installed) {
+            var openCodeHeader = browserCookies.getCookieHeader("claude.ai");
+            if (openCodeHeader.length > 0) {
+                openCodeMonitor.syncFromBrowser(openCodeHeader, plasmoid.configuration.browserSyncBrowser);
+            }
+        }
+
         // Sync Codex CLI (chatgpt.com cookies)
         if (plasmoid.configuration.codexEnabled && codexCliMonitor.installed) {
             var codexHeader = browserCookies.getCookieHeader("chatgpt.com");
@@ -850,6 +888,10 @@ PlasmoidItem {
         function onClaudeCodeEnabledChanged() {
             claudeCodeMonitor.enabled = plasmoid.configuration.claudeCodeEnabled;
             if (claudeCodeMonitor.enabled) claudeCodeMonitor.checkToolInstalled();
+        }
+        function onOpenCodeEnabledChanged() {
+            openCodeMonitor.enabled = plasmoid.configuration.openCodeEnabled;
+            if (openCodeMonitor.enabled) openCodeMonitor.checkToolInstalled();
         }
         function onCodexEnabledChanged() {
             codexCliMonitor.enabled = plasmoid.configuration.codexEnabled;

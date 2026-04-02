@@ -18,6 +18,7 @@ set(TEST_SUBSCRIPTION_SRC
     ${CMAKE_SOURCE_DIR}/plugin/claudecodemonitor.cpp
     ${CMAKE_SOURCE_DIR}/plugin/codexclimonitor.cpp
     ${CMAKE_SOURCE_DIR}/plugin/copilotmonitor.cpp
+    ${CMAKE_SOURCE_DIR}/plugin/opencodemonitor.cpp
 )
 
 set(TEST_PROVIDER_BACKEND_ONLY_SRC

@@ -19,6 +19,12 @@ KCM.SimpleKCM {
     property alias cfg_claudeCodeCustomLimit: claudeCodeLimitSpin.value
     property alias cfg_claudeCodeNotifications: claudeCodeNotifySwitch.checked
 
+    // ── OpenCode ──
+    property alias cfg_openCodeEnabled: openCodeSwitch.checked
+    property alias cfg_openCodePlan: openCodePlanCombo.currentIndex
+    property alias cfg_openCodeCustomLimit: openCodeLimitSpin.value
+    property alias cfg_openCodeNotifications: openCodeNotifySwitch.checked
+
     // ── Codex CLI ──
     property alias cfg_codexEnabled: codexSwitch.checked
     property alias cfg_codexPlan: codexPlanCombo.currentIndex
@@ -62,6 +68,11 @@ KCM.SimpleKCM {
     // ── Temporary monitors for detection ──
     ClaudeCodeMonitor {
         id: claudeDetector
+        Component.onCompleted: checkToolInstalled()
+    }
+
+    OpenCodeMonitor {
+        id: openCodeDetector
         Component.onCompleted: checkToolInstalled()
     }
 
@@ -257,6 +268,127 @@ KCM.SimpleKCM {
                 id: claudeCodeNotifySwitch
                 enabled: claudeCodeSwitch.checked
                 checked: plasmoid.configuration.claudeCodeNotifications
+            }
+        }
+
+        // ══════════════════════════════════════════════
+        // ── OpenCode ──
+        // ══════════════════════════════════════════════
+
+        Kirigami.Separator {
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        QQC2.Label {
+            text: i18n("OpenCode")
+            font.bold: true
+        }
+
+        // Enable row
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Enable:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.Switch {
+                id: openCodeSwitch
+                checked: plasmoid.configuration.openCodeEnabled
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                text: openCodeDetector.installed
+                    ? "✓ " + i18n("Detected")
+                    : "✗ " + i18n("Not found")
+                color: openCodeDetector.installed
+                    ? Kirigami.Theme.positiveTextColor
+                    : Kirigami.Theme.disabledTextColor
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+            }
+        }
+
+        // Plan row
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Plan:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: openCodePlanCombo
+                enabled: openCodeSwitch.checked
+                Layout.fillWidth: true
+                model: openCodeDetector.availablePlans()
+                currentIndex: plasmoid.configuration.openCodePlan
+                onCurrentIndexChanged: {
+                    var plans = openCodeDetector.availablePlans();
+                    if (currentIndex >= 0 && currentIndex < plans.length) {
+                        var def = openCodeDetector.defaultLimitForPlan(plans[currentIndex]);
+                        if (openCodeLimitSpin.value === 0 || !openCodeLimitOverride.checked) {
+                            openCodeLimitSpin.value = def;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Usage limit row
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Usage limit (per 5h):")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+                wrapMode: Text.WordWrap
+            }
+            QQC2.SpinBox {
+                id: openCodeLimitSpin
+                enabled: openCodeSwitch.checked
+                from: 0; to: 99999
+                value: plasmoid.configuration.openCodeCustomLimit
+                editable: true
+                Component.onCompleted: {
+                    if (value === 0) {
+                        var plans = openCodeDetector.availablePlans();
+                        var idx = openCodePlanCombo.currentIndex;
+                        if (idx >= 0 && idx < plans.length) {
+                            value = openCodeDetector.defaultLimitForPlan(plans[idx]);
+                        }
+                    }
+                }
+            }
+            QQC2.CheckBox {
+                id: openCodeLimitOverride
+                text: i18n("Custom")
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+            }
+        }
+
+        QQC2.Label {
+            visible: openCodeSwitch.checked
+            Layout.fillWidth: true
+            text: i18n("OpenCode shares the Claude.ai subscription. Usage limits are "
+                     + "the same as Claude Code when using the Anthropic provider.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            opacity: 0.6
+            wrapMode: Text.WordWrap
+        }
+
+        // Notifications row
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Notifications:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.Switch {
+                id: openCodeNotifySwitch
+                enabled: openCodeSwitch.checked
+                checked: plasmoid.configuration.openCodeNotifications
             }
         }
 

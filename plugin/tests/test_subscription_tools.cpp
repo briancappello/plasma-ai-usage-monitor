@@ -7,6 +7,7 @@
 #include "claudecodemonitor.h"
 #include "codexclimonitor.h"
 #include "copilotmonitor.h"
+#include "opencodemonitor.h"
 
 class EnvVarGuard
 {
@@ -39,6 +40,7 @@ class SubscriptionToolsTest : public QObject
 
 private Q_SLOTS:
     void planDefaults();
+    void openCodePlanDefaults();
     void installDetectionWithTemporaryHome();
     void usageIncrementAndReset();
     void browserSyncEmptyCookieDiagnostics();
@@ -62,6 +64,17 @@ void SubscriptionToolsTest::planDefaults()
     QCOMPARE(copilot.defaultCostForPlan(QStringLiteral("Business")), 19.0);
 }
 
+void SubscriptionToolsTest::openCodePlanDefaults()
+{
+    OpenCodeMonitor opencode;
+    QCOMPARE(opencode.defaultLimitForPlan(QStringLiteral("Pro")), 45);
+    QCOMPARE(opencode.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 1125);
+    QCOMPARE(opencode.defaultCostForPlan(QStringLiteral("Max 20x")), 200.0);
+    QCOMPARE(opencode.toolName(), QStringLiteral("OpenCode"));
+    QVERIFY(opencode.hasSecondaryLimit());
+    QVERIFY(opencode.hasSubscriptionCost());
+}
+
 void SubscriptionToolsTest::installDetectionWithTemporaryHome()
 {
     QTemporaryDir tempHome;
@@ -76,26 +89,32 @@ void SubscriptionToolsTest::installDetectionWithTemporaryHome()
     ClaudeCodeMonitor claude;
     CodexCliMonitor codex;
     CopilotMonitor copilot;
+    OpenCodeMonitor opencode;
 
     claude.checkToolInstalled();
     codex.checkToolInstalled();
     copilot.checkToolInstalled();
+    opencode.checkToolInstalled();
 
     QVERIFY(!claude.isInstalled());
     QVERIFY(!codex.isInstalled());
     QVERIFY(!copilot.isInstalled());
+    QVERIFY(!opencode.isInstalled());
 
     QVERIFY(QDir().mkpath(tempHome.path() + QStringLiteral("/.claude")));
     QVERIFY(QDir().mkpath(tempHome.path() + QStringLiteral("/.codex")));
     QVERIFY(QDir().mkpath(tempHome.path() + QStringLiteral("/.vscode/extensions/github.copilot-test")));
+    QVERIFY(QDir().mkpath(tempHome.path() + QStringLiteral("/.local/share/opencode")));
 
     claude.checkToolInstalled();
     codex.checkToolInstalled();
     copilot.checkToolInstalled();
+    opencode.checkToolInstalled();
 
     QVERIFY(claude.isInstalled());
     QVERIFY(codex.isInstalled());
     QVERIFY(copilot.isInstalled());
+    QVERIFY(opencode.isInstalled());
 }
 
 void SubscriptionToolsTest::usageIncrementAndReset()
@@ -151,6 +170,24 @@ void SubscriptionToolsTest::browserSyncEmptyCookieDiagnostics()
     const QList<QVariant> codexDiagnosticArgs = codexDiagnosticSpy.takeFirst();
     QCOMPARE(codexDiagnosticArgs.at(0).toString(), QStringLiteral("Codex CLI"));
     QCOMPARE(codexDiagnosticArgs.at(1).toString(), QStringLiteral("not_logged_in"));
+
+    OpenCodeMonitor opencode;
+    QSignalSpy opencodeCompletedSpy(&opencode, &SubscriptionToolBackend::syncCompleted);
+    QSignalSpy opencodeDiagnosticSpy(&opencode, &SubscriptionToolBackend::syncDiagnostic);
+
+    opencode.syncFromBrowser(QString(), 0);
+
+    QCOMPARE(opencodeCompletedSpy.count(), 1);
+    QCOMPARE(opencodeDiagnosticSpy.count(), 1);
+    QCOMPARE(opencode.syncStatus(), QStringLiteral("Not logged in"));
+
+    const QList<QVariant> opencodeCompletionArgs = opencodeCompletedSpy.takeFirst();
+    QCOMPARE(opencodeCompletionArgs.at(0).toBool(), false);
+    QVERIFY(opencodeCompletionArgs.at(1).toString().contains(QStringLiteral("Not logged in"), Qt::CaseInsensitive));
+
+    const QList<QVariant> opencodeDiagnosticArgs = opencodeDiagnosticSpy.takeFirst();
+    QCOMPARE(opencodeDiagnosticArgs.at(0).toString(), QStringLiteral("OpenCode"));
+    QCOMPARE(opencodeDiagnosticArgs.at(1).toString(), QStringLiteral("not_logged_in"));
 }
 
 QTEST_MAIN(SubscriptionToolsTest)

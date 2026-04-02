@@ -8,37 +8,68 @@ BUILD_DIR="${PROJECT_DIR}/build"
 echo "=== AI Usage Monitor - Build & Install ==="
 echo ""
 
-# Check for required build dependencies
-check_dep() {
-    if ! rpm -q "$1" &>/dev/null; then
-        echo "Missing dependency: $1"
-        MISSING_DEPS+=("$1")
-    fi
-}
+# Detect distro
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO_ID="${ID:-unknown}"
+else
+    DISTRO_ID="unknown"
+fi
+
+case "$DISTRO_ID" in
+    fedora)
+        DEPS=(cmake extra-cmake-modules gcc-c++ qt6-qtbase-devel
+              qt6-qtdeclarative-devel libplasma-devel kf6-kwallet-devel
+              kf6-ki18n-devel kf6-knotifications-devel)
+        check_dep() {
+            if ! rpm -q "$1" &>/dev/null; then
+                echo "Missing dependency: $1"
+                MISSING_DEPS+=("$1")
+            fi
+        }
+        install_deps() { sudo dnf install -y "${MISSING_DEPS[@]}"; }
+        ;;
+    arch)
+        DEPS=(cmake extra-cmake-modules gcc qt6-base qt6-declarative
+              plasma-desktop kwallet ki18n knotifications)
+        check_dep() {
+            if ! pacman -Qi "$1" &>/dev/null; then
+                echo "Missing dependency: $1"
+                MISSING_DEPS+=("$1")
+            fi
+        }
+        install_deps() { sudo pacman -S --needed --noconfirm "${MISSING_DEPS[@]}"; }
+        ;;
+    *)
+        echo "Warning: Unsupported distro '$DISTRO_ID'. Skipping dependency check."
+        echo "  Please manually install: cmake, extra-cmake-modules, Qt6, KF6 (kwallet, ki18n, knotifications), libplasma"
+        DEPS=()
+        check_dep() { :; }
+        install_deps() { :; }
+        ;;
+esac
 
 MISSING_DEPS=()
-check_dep cmake
-check_dep extra-cmake-modules
-check_dep gcc-c++
-check_dep qt6-qtbase-devel
-check_dep qt6-qtdeclarative-devel
-check_dep libplasma-devel
-check_dep kf6-kwallet-devel
-check_dep kf6-ki18n-devel
-check_dep kf6-knotifications-devel
+for dep in "${DEPS[@]}"; do
+    check_dep "$dep"
+done
 
-# Qt6 SQL / SQLite driver (bundled in qt6-qtbase on Fedora)
-# Verify the driver file exists rather than checking a non-existent package
+# Qt6 SQL / SQLite driver
+# On Fedora this is bundled in qt6-qtbase; on Arch it is in qt6-base
 if [ ! -f /usr/lib64/qt6/plugins/sqldrivers/libqsqlite.so ] && \
    [ ! -f /usr/lib/qt6/plugins/sqldrivers/libqsqlite.so ]; then
     echo "Warning: Qt6 SQLite driver not found. Usage history may not work."
-    echo "  It is normally provided by the qt6-qtbase package."
+    case "$DISTRO_ID" in
+        fedora) echo "  It is normally provided by the qt6-qtbase package." ;;
+        arch)   echo "  It is normally provided by the qt6-base package." ;;
+        *)      echo "  Ensure your Qt6 base package includes SQLite support." ;;
+    esac
 fi
 
 if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     echo ""
     echo "Installing missing dependencies..."
-    sudo dnf install -y "${MISSING_DEPS[@]}"
+    install_deps
     echo ""
 fi
 

@@ -21,6 +21,7 @@ set(aiusagemonitor_SRCS
     claudecodemonitor.cpp
     codexclimonitor.cpp
     copilotmonitor.cpp
+    opencodemonitor.cpp
     browsercookieextractor.cpp
 )
 
@@ -48,6 +49,7 @@ set(aiusagemonitor_HDRS
     claudecodemonitor.h
     codexclimonitor.h
     copilotmonitor.h
+    opencodemonitor.h
     browsercookieextractor.h
 )
 

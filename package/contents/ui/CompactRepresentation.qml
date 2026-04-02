@@ -139,15 +139,22 @@ MouseArea {
         }
     }
 
-    // Chart mode — Claude Code session usage bar + reset countdown
+    // Chart mode — subscription tool session usage bar + reset countdown
     Item {
         id: chartMode
         anchors.fill: parent
         visible: compactRoot.displayMode === "chart"
 
-        readonly property var ccMonitor: root.claudeCode
+        // Resolve which monitor to display from the chartToolIndex config
+        // Index order matches allSubscriptionTools: 0=Claude Code, 1=OpenCode, 2=Codex CLI, 3=Copilot
+        readonly property var allTools: root.allSubscriptionTools ?? []
+        readonly property int toolIdx: Math.min(
+            Math.max(0, plasmoid.configuration.chartToolIndex ?? 0),
+            allTools.length - 1)
+        readonly property var selectedTool: allTools.length > 0 ? allTools[toolIdx] : null
+        readonly property var ccMonitor: selectedTool ? selectedTool.monitor : null
         readonly property bool ccAvailable: ccMonitor
-                                            && plasmoid.configuration.claudeCodeEnabled
+                                            && selectedTool && selectedTool.enabled
                                             && ccMonitor.installed
 
         // Live countdown: tick every second while visible

@@ -7,12 +7,16 @@
 
     <group name="General">
         <entry name="refreshInterval" type="Int">
-            <default>300</default>
+            <default>60</default>
             <label>Default refresh interval in seconds</label>
         </entry>
         <entry name="compactDisplayMode" type="String">
-            <default>icon</default>
+            <default>chart</default>
             <label>What to show in compact mode: icon, cost, count, chart</label>
+        </entry>
+        <entry name="chartToolIndex" type="Int">
+            <default>1</default>
+            <label>Which subscription tool to display in panel chart mode (index into allSubscriptionTools)</label>
         </entry>
 
         <!-- Per-provider refresh intervals (0 = use global default) -->
@@ -54,7 +58,7 @@
     <group name="Subscriptions">
         <!-- Browser Sync (experimental) -->
         <entry name="browserSyncEnabled" type="Bool">
-            <default>false</default>
+            <default>true</default>
             <label>Enable experimental browser cookie sync for real-time usage data</label>
         </entry>
         <entry name="browserSyncBrowser" type="Int">
@@ -62,7 +66,7 @@
             <label>Browser type: 0=Firefox, 1=Chrome (not supported), 2=Chromium (not supported)</label>
         </entry>
         <entry name="browserSyncInterval" type="Int">
-            <default>300</default>
+            <default>60</default>
             <label>Browser sync refresh interval in seconds</label>
         </entry>
 
@@ -79,6 +83,22 @@
             <label>Custom usage limit per 5h period (0 = use plan default)</label>
         </entry>
         <entry name="claudeCodeNotifications" type="Bool">
+            <default>true</default>
+        </entry>
+
+        <!-- OpenCode -->
+        <entry name="openCodeEnabled" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="openCodePlan" type="Int">
+            <default>2</default>
+            <label>Plan index: 0=Pro, 1=Max 5x, 2=Max 20x</label>
+        </entry>
+        <entry name="openCodeCustomLimit" type="Int">
+            <default>0</default>
+            <label>Custom usage limit per 5h period (0 = use plan default)</label>
+        </entry>
+        <entry name="openCodeNotifications" type="Bool">
             <default>true</default>
         </entry>
 

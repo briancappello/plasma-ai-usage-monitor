@@ -10,6 +10,7 @@ KCM.SimpleKCM {
 
     property alias cfg_refreshInterval: refreshSlider.value
     property string cfg_compactDisplayMode: plasmoid.configuration.compactDisplayMode
+    property alias cfg_chartToolIndex: chartToolCombo.currentIndex
 
     property alias cfg_openaiRefreshInterval: openaiRefreshSlider.value
     property alias cfg_anthropicRefreshInterval: anthropicRefreshSlider.value
@@ -72,7 +73,7 @@ KCM.SimpleKCM {
             QQC2.ComboBox {
                 id: compactModeCombo
                 Layout.fillWidth: true
-                model: [i18n("Icon only"), i18n("Total cost"), i18n("Active providers count"), i18n("Claude Code chart")]
+                model: [i18n("Icon only"), i18n("Total cost"), i18n("Active providers count"), i18n("Subscription chart")]
                 QQC2.ToolTip.text: i18n("Choose what to display next to the icon in the system panel")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
@@ -92,6 +93,26 @@ KCM.SimpleKCM {
                         default: generalPage.cfg_compactDisplayMode = "icon"; break;
                     }
                 }
+            }
+        }
+
+        // Chart tool selector (visible when chart mode is selected)
+        RowLayout {
+            visible: generalPage.cfg_compactDisplayMode === "chart"
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Chart tool:")
+                Layout.preferredWidth: generalPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: chartToolCombo
+                Layout.fillWidth: true
+                model: [i18n("Claude Code"), i18n("OpenCode"), i18n("Codex CLI"), i18n("GitHub Copilot")]
+                currentIndex: plasmoid.configuration.chartToolIndex
+                QQC2.ToolTip.text: i18n("Which subscription tool to display in the panel chart")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: 500
             }
         }
 
