@@ -450,6 +450,7 @@ void OpenCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &cook
         // fall back to the flat five_hour / seven_day objects.
         double sessionPct = -1.0;
         double weeklyPct = -1.0;
+        QVariantList scoped; // per-model weekly limits (e.g. "Fable")
         const QJsonArray limits = root.value(QStringLiteral("limits")).toArray();
         for (const QJsonValue &v : limits) {
             const QJsonObject l = v.toObject();
@@ -459,8 +460,20 @@ void OpenCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &cook
                 sessionPct = pct;
             } else if (kind == QStringLiteral("weekly_all")) {
                 weeklyPct = pct;
+            } else if (kind == QStringLiteral("weekly_scoped")) {
+                const QString modelName = l.value(QStringLiteral("scope")).toObject()
+                                           .value(QStringLiteral("model")).toObject()
+                                           .value(QStringLiteral("display_name")).toString();
+                if (!modelName.isEmpty()) {
+                    scoped.append(QVariantMap{
+                        {QStringLiteral("name"), modelName},
+                        {QStringLiteral("percent"), static_cast<int>(qRound(pct))},
+                        {QStringLiteral("resetsAt"), l.value(QStringLiteral("resets_at")).toString()},
+                    });
+                }
             }
         }
+        setScopedLimits(scoped);
 
         // Parse 5-hour session usage
         QJsonObject fiveHour = root.value(QStringLiteral("five_hour")).toObject();

@@ -404,6 +404,60 @@ ColumnLayout {
                 }
             }
 
+            // ═══ Per-model weekly limits (e.g., Claude's "Fable") ═══
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: !toolCard.collapsed && (toolCard.monitor?.installed ?? false)
+                         && (toolCard.monitor?.scopedLimits?.length ?? 0) > 0
+                spacing: Kirigami.Units.smallSpacing
+
+                Repeater {
+                    model: toolCard.monitor?.scopedLimits ?? []
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            PlasmaComponents.Label {
+                                text: modelData.name
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                opacity: 0.7
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            PlasmaComponents.Label {
+                                text: (modelData.percent ?? 0) + " / 100"
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                font.bold: true
+                            }
+                        }
+
+                        QQC2.ProgressBar {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 6
+                            from: 0
+                            to: 100
+                            value: Math.min(modelData.percent ?? 0, 100)
+
+                            background: Rectangle {
+                                implicitHeight: 6; radius: 3
+                                color: Qt.alpha(Kirigami.Theme.textColor, 0.1)
+                            }
+
+                            contentItem: Rectangle {
+                                width: parent.visualPosition * parent.width
+                                height: 6; radius: 3
+                                color: usageColor(modelData.percent ?? 0)
+                                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+                                Behavior on color { ColorAnimation { duration: 300 } }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ═══ Tertiary limit (e.g., Codex code review) ═══
             ColumnLayout {
                 Layout.fillWidth: true

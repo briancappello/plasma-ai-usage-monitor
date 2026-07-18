@@ -336,6 +336,9 @@ bool SubscriptionToolBackend::hasCredits() const { return false; }
 int SubscriptionToolBackend::remainingCredits() const { return m_remainingCredits; }
 void SubscriptionToolBackend::setRemainingCredits(int credits) { m_remainingCredits = credits; }
 
+QVariantList SubscriptionToolBackend::scopedLimits() const { return m_scopedLimits; }
+void SubscriptionToolBackend::setScopedLimits(const QVariantList &limits) { m_scopedLimits = limits; }
+
 // --- Browser Sync ---
 
 bool SubscriptionToolBackend::isSyncEnabled() const { return m_syncEnabled; }

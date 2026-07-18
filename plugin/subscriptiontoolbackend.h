@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QTimer>
 #include <QJsonObject>
+#include <QVariantList>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -95,6 +96,11 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(int remainingCredits READ remainingCredits NOTIFY usageUpdated)
     Q_PROPERTY(bool hasCredits READ hasCredits CONSTANT)
 
+    // Per-model scoped weekly limits (e.g., Claude's "Fable"). Variable length;
+    // each entry is a map { name, percent, resetsAt }. Empty for tools that
+    // don't report them.
+    Q_PROPERTY(QVariantList scopedLimits READ scopedLimits NOTIFY usageUpdated)
+
 public:
     enum UsagePeriod {
         FiveHour,   // 5-hour rolling window (Claude Code, Codex)
@@ -181,6 +187,9 @@ public:
     virtual bool hasCredits() const;
     int remainingCredits() const;
 
+    // Per-model scoped weekly limits
+    QVariantList scopedLimits() const;
+
     // Actions
     Q_INVOKABLE void incrementUsage();
     Q_INVOKABLE void resetUsage();
@@ -231,6 +240,7 @@ protected:
     void setTertiaryResetDate(const QDateTime &date);
     void setRemainingCredits(int credits);
     void setSubscriptionCostValue(double cost);
+    void setScopedLimits(const QVariantList &limits);
 
     // Period management
     virtual UsagePeriod primaryPeriodType() const = 0;
@@ -272,6 +282,9 @@ private:
 
     // Credits
     int m_remainingCredits = 0;
+
+    // Per-model scoped weekly limits
+    QVariantList m_scopedLimits;
 
     // Sync state
     bool m_syncEnabled = false;

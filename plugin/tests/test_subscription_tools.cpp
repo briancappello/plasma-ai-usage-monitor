@@ -384,6 +384,13 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     // widget start time (secondaryPeriodEnd == start + 7 days).
     QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
              QDateTime::fromString(QStringLiteral("2099-01-07T00:00:00Z"), Qt::ISODate).toUTC());
+
+    // Per-model weekly limits (weekly_scoped) are surfaced as scopedLimits.
+    const QVariantList scoped = claude.scopedLimits();
+    QCOMPARE(scoped.size(), 1);
+    const QVariantMap fable = scoped.first().toMap();
+    QCOMPARE(fable.value(QStringLiteral("name")).toString(), QStringLiteral("Fable"));
+    QCOMPARE(fable.value(QStringLiteral("percent")).toInt(), 1);
 }
 
 QTEST_MAIN(SubscriptionToolsTest)
