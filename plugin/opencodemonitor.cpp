@@ -302,9 +302,34 @@ void OpenCodeMonitor::fetchAccountInfo(const QString &cookieHeader)
         }
         QJsonArray memberships = account.value(QStringLiteral("memberships")).toArray();
         QJsonObject org; // Declared in outer scope for plan detection below
-        if (!memberships.isEmpty()) {
-            QJsonObject firstMembership = memberships.first().toObject();
-            org = firstMembership.value(QStringLiteral("organization")).toObject();
+
+        // Pick the membership whose organization owns the Claude subscription
+        // (chat / claude_max / claude_pro). A separate API/console org (whose
+        // capabilities include "api") returns 403 on /usage — selecting it
+        // caused false "session expired" errors.
+        auto hasSubscriptionCapability = [](const QJsonObject &organization) {
+            const QJsonArray caps = organization.value(QStringLiteral("capabilities")).toArray();
+            for (const QJsonValue &c : caps) {
+                const QString cap = c.toString();
+                if (cap == QStringLiteral("chat")
+                    || cap.startsWith(QStringLiteral("claude_"))) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        for (const QJsonValue &m : memberships) {
+            const QJsonObject candidate = m.toObject().value(QStringLiteral("organization")).toObject();
+            if (hasSubscriptionCapability(candidate)) {
+                org = candidate;
+                orgUuid = candidate.value(QStringLiteral("uuid")).toString();
+                break;
+            }
+        }
+
+        if (orgUuid.isEmpty() && !memberships.isEmpty()) {
+            org = memberships.first().toObject().value(QStringLiteral("organization")).toObject();
             orgUuid = org.value(QStringLiteral("uuid")).toString();
         }
 
@@ -324,35 +349,34 @@ void OpenCodeMonitor::fetchAccountInfo(const QString &cookieHeader)
 
         m_orgUuid = orgUuid;
 
-        // Auto-detect plan from organization subscription data
-        QJsonObject subscription = org.value(QStringLiteral("subscription")).toObject();
-        if (!subscription.isEmpty()) {
-            QString planType = subscription.value(QStringLiteral("type")).toString();
-            // Also check for rate_limit_tier as fallback
-            if (planType.isEmpty()) {
-                planType = org.value(QStringLiteral("rate_limit_tier")).toString();
-            }
+        // Auto-detect plan. Prefer subscription.type; fall back to the org's
+        // rate_limit_tier (e.g. "default_claude_max_20x"), present on Claude Max
+        // orgs that have no separate subscription object.
+        QString planType = org.value(QStringLiteral("subscription")).toObject()
+                               .value(QStringLiteral("type")).toString();
+        if (planType.isEmpty()) {
+            planType = org.value(QStringLiteral("rate_limit_tier")).toString();
+        }
 
-            QString detectedPlan;
-            if (planType.contains(QStringLiteral("max_20x"), Qt::CaseInsensitive)
-                || planType.contains(QStringLiteral("max20x"), Qt::CaseInsensitive)
-                || planType == QStringLiteral("scale_max_20x")) {
-                detectedPlan = QStringLiteral("Max 20x");
-            } else if (planType.contains(QStringLiteral("max_5x"), Qt::CaseInsensitive)
-                       || planType.contains(QStringLiteral("max5x"), Qt::CaseInsensitive)
-                       || planType == QStringLiteral("scale_max_5x")) {
-                detectedPlan = QStringLiteral("Max 5x");
-            } else if (planType.contains(QStringLiteral("pro"), Qt::CaseInsensitive)
-                       || planType == QStringLiteral("professional")) {
-                detectedPlan = QStringLiteral("Pro");
-            }
+        QString detectedPlan;
+        if (planType.contains(QStringLiteral("max_20x"), Qt::CaseInsensitive)
+            || planType.contains(QStringLiteral("max20x"), Qt::CaseInsensitive)
+            || planType == QStringLiteral("scale_max_20x")) {
+            detectedPlan = QStringLiteral("Max 20x");
+        } else if (planType.contains(QStringLiteral("max_5x"), Qt::CaseInsensitive)
+                   || planType.contains(QStringLiteral("max5x"), Qt::CaseInsensitive)
+                   || planType == QStringLiteral("scale_max_5x")) {
+            detectedPlan = QStringLiteral("Max 5x");
+        } else if (planType.contains(QStringLiteral("pro"), Qt::CaseInsensitive)
+                   || planType == QStringLiteral("professional")) {
+            detectedPlan = QStringLiteral("Pro");
+        }
 
-            if (!detectedPlan.isEmpty() && detectedPlan != planTier()) {
-                qDebug() << "OpenCodeMonitor: Auto-detected plan:" << detectedPlan << "(raw:" << planType << ")";
-                setPlanTier(detectedPlan);
-                setUsageLimit(defaultLimitForPlan(detectedPlan));
-                setSecondaryUsageLimit(defaultSecondaryLimitForPlan(detectedPlan));
-            }
+        if (!detectedPlan.isEmpty() && detectedPlan != planTier()) {
+            qDebug() << "OpenCodeMonitor: Auto-detected plan:" << detectedPlan << "(raw:" << planType << ")";
+            setPlanTier(detectedPlan);
+            setUsageLimit(defaultLimitForPlan(detectedPlan));
+            setSecondaryUsageLimit(defaultSecondaryLimitForPlan(detectedPlan));
         }
 
         fetchUsageData(orgUuid, cookieHeader);

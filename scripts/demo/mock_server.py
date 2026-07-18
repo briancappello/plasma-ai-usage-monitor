@@ -71,22 +71,33 @@ class MockApiHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # Claude Code (claude.ai) bootstrap — account + org UUID + plan
+        # Claude Code (claude.ai) bootstrap — account with TWO orgs: an API org
+        # (whose /usage 403s) and the Claude Max subscription org. Mirrors real
+        # accounts; the widget must pick the subscription org by capability.
         if path == "/claude/api/bootstrap":
             self._send_json(200, {
                 "account": {
                     "uuid": "acct_demo",
                     "memberships": [
-                        {
-                            "organization": {
-                                "uuid": "org_demo_123",
-                                "subscription": {"type": "max_20x"},
-                                "rate_limit_tier": "scale_max_20x"
-                            }
-                        }
+                        {"organization": {
+                            "uuid": "org_api_demo",
+                            "capabilities": ["api", "api_individual"]
+                        }},
+                        {"organization": {
+                            "uuid": "org_demo_123",
+                            "capabilities": ["chat", "claude_max"],
+                            "rate_limit_tier": "default_claude_max_20x"
+                        }}
                     ]
                 }
             })
+            return
+
+        # The API org has no subscription usage → 403, like the real API.
+        if path == "/claude/api/organizations/org_api_demo/usage":
+            self._send_json(403, {"type": "error",
+                                  "error": {"type": "permission_error",
+                                            "message": "Invalid authorization for organization"}})
             return
 
         # Claude Code usage — percentage-based, mirroring the real claude.ai API.

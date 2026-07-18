@@ -35,8 +35,19 @@ private Q_SLOTS:
             const QByteArray firstLine = req.left(req.indexOf('\r'));
 
             QByteArray body;
+            int status = 200;
             if (firstLine.contains("/bootstrap")) {
-                body = R"({"account":{"uuid":"acct","memberships":[{"organization":{"uuid":"org_1","subscription":{"type":"max_20x"}}}]}})";
+                // Two memberships: an API/console org FIRST (whose /usage 403s),
+                // then the Claude Max subscription org. The monitor must pick the
+                // latter by capability and read its plan from rate_limit_tier.
+                body = R"({"account":{"uuid":"acct","memberships":[)"
+                       R"({"organization":{"uuid":"org_api","capabilities":["api","api_individual"]}},)"
+                       R"({"organization":{"uuid":"org_max","capabilities":["chat","claude_max"],)"
+                       R"("rate_limit_tier":"default_claude_max_20x"}}]}})";
+            } else if (firstLine.contains("/org_api/usage")) {
+                // Selecting the API org must never happen; if it does, 403.
+                status = 403;
+                body = R"({"type":"error","error":{"type":"permission_error"}})";
             } else if (firstLine.contains("/usage")) {
                 // Real-shaped percentage response (see claudecodemonitor.cpp).
                 body = R"({"five_hour":{"utilization":4.0,"resets_at":"2099-01-01T00:00:00Z"},)"
@@ -47,10 +58,13 @@ private Q_SLOTS:
                        R"({"kind":"weekly_scoped","group":"weekly","percent":1,)"
                        R"("scope":{"model":{"display_name":"Fable"}},"is_active":false}]})";
             } else {
+                status = 404;
                 body = R"({"error":"not found"})";
             }
 
-            QByteArray resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+            const char *reason = status == 200 ? "OK" : (status == 403 ? "Forbidden" : "Not Found");
+            QByteArray resp = "HTTP/1.1 " + QByteArray::number(status) + " " + reason
+                + "\r\nContent-Type: application/json\r\nContent-Length: "
                 + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
             sock->write(resp);
             sock->flush();
