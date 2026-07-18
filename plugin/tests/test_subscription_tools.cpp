@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QSignalSpy>
+#include <QDateTime>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -365,7 +366,8 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     QCOMPARE(completedSpy.count(), 1);
     QCOMPARE(completedSpy.takeFirst().at(0).toBool(), true);
 
-    // Plan auto-detected from bootstrap subscription.type == "max_20x".
+    // Plan auto-detected from the Claude Max org's rate_limit_tier
+    // ("default_claude_max_20x"), even though it has no subscription object.
     QCOMPARE(claude.planTier(), QStringLiteral("Max 20x"));
 
     // Percentage-native: limits are the 0–100 scale, counts equal the percent.
@@ -377,6 +379,11 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
 
     // extra_usage is disabled in the payload → no metered row.
     QCOMPARE(claude.hasExtraUsage(), false);
+
+    // Weekly reset is anchored to the API's seven_day.resets_at, not the
+    // widget start time (secondaryPeriodEnd == start + 7 days).
+    QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
+             QDateTime::fromString(QStringLiteral("2099-01-07T00:00:00Z"), Qt::ISODate).toUTC());
 }
 
 QTEST_MAIN(SubscriptionToolsTest)

@@ -490,6 +490,16 @@ void OpenCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &cook
         }
         if (weeklyPct >= 0.0) {
             setSecondaryUsageCount(static_cast<int>(qRound(weeklyPct)));
+
+            // Anchor the weekly reset to the API value (secondaryPeriodEnd =
+            // secondaryPeriodStart + 7 days).
+            const QString weeklyResetsAt = sevenDay.value(QStringLiteral("resets_at")).toString();
+            if (!weeklyResetsAt.isEmpty()) {
+                QDateTime weeklyReset = QDateTime::fromString(weeklyResetsAt, Qt::ISODate);
+                if (weeklyReset.isValid()) {
+                    setSecondaryPeriodStart(weeklyReset.addDays(-7));
+                }
+            }
         }
 
         // Parse extra_usage (metered credit spending). Real fields:
