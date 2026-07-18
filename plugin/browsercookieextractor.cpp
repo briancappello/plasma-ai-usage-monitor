@@ -25,6 +25,24 @@ void BrowserCookieExtractor::setBrowserType(int type)
     }
 }
 
+QString BrowserCookieExtractor::selectedFirefoxProfile() const
+{
+    return m_selectedFirefoxProfile;
+}
+
+void BrowserCookieExtractor::setSelectedFirefoxProfile(const QString &profile)
+{
+    if (m_selectedFirefoxProfile != profile) {
+        m_selectedFirefoxProfile = profile;
+        // Invalidate cache when profile changes.
+        m_cachedDomain.clear();
+        m_cachedCookies.clear();
+        m_cacheTimestamp = 0;
+        Q_EMIT selectedFirefoxProfileChanged();
+        Q_EMIT profilesChanged();
+    }
+}
+
 bool BrowserCookieExtractor::hasFirefoxProfile() const
 {
     return !firefoxProfilePath().isEmpty();
@@ -55,6 +73,14 @@ QString BrowserCookieExtractor::firefoxProfilePath() const
     QString mozDir = QDir::homePath() + QStringLiteral("/.mozilla/firefox");
     QDir dir(mozDir);
     if (!dir.exists()) return QString();
+
+    // If user selected a specific profile, try it first.
+    if (!m_selectedFirefoxProfile.trimmed().isEmpty()) {
+        const QString selectedPath = firefoxProfilePathByName(m_selectedFirefoxProfile.trimmed());
+        if (!selectedPath.isEmpty()) {
+            return selectedPath;
+        }
+    }
 
     // Read profiles.ini to find the default profile
     QString profilesIni = mozDir + QStringLiteral("/profiles.ini");
@@ -109,6 +135,39 @@ QString BrowserCookieExtractor::firefoxProfilePath() const
     return QString();
 }
 
+QString BrowserCookieExtractor::firefoxProfilePathByName(const QString &profileName) const
+{
+    if (profileName.trimmed().isEmpty()) {
+        return QString();
+    }
+
+    const QString mozDir = QDir::homePath() + QStringLiteral("/.mozilla/firefox");
+    const QString profilesIni = mozDir + QStringLiteral("/profiles.ini");
+    if (!QFileInfo::exists(profilesIni)) {
+        return QString();
+    }
+
+    QSettings ini(profilesIni, QSettings::IniFormat);
+    const QStringList groups = ini.childGroups();
+    for (const QString &group : groups) {
+        if (!group.startsWith(QStringLiteral("Profile"))) continue;
+        ini.beginGroup(group);
+        const QString name = ini.value(QStringLiteral("Name")).toString().trimmed();
+        const QString path = ini.value(QStringLiteral("Path")).toString();
+        const bool isRelative = ini.value(QStringLiteral("IsRelative"), 1).toInt() == 1;
+        ini.endGroup();
+
+        if (name != profileName) continue;
+
+        const QString fullPath = isRelative ? (mozDir + QStringLiteral("/") + path) : path;
+        if (QFileInfo::exists(fullPath + QStringLiteral("/cookies.sqlite"))) {
+            return fullPath;
+        }
+    }
+
+    return QString();
+}
+
 QStringList BrowserCookieExtractor::firefoxProfiles() const
 {
     QStringList profiles;
@@ -125,7 +184,7 @@ QStringList BrowserCookieExtractor::firefoxProfiles() const
             ini.beginGroup(group);
             QString name = ini.value(QStringLiteral("Name")).toString();
             ini.endGroup();
-            if (!name.isEmpty()) profiles.append(name);
+            if (!name.isEmpty() && !profiles.contains(name)) profiles.append(name);
         }
     }
     return profiles;
@@ -339,7 +398,7 @@ QString BrowserCookieExtractor::connectionMessage(const QString &service, const 
         return QStringLiteral("No Firefox profile detected on this system.");
     }
     if (normalizedCode == QStringLiteral("cookie_db_missing")) {
-        return QStringLiteral("Firefox profile found, but cookie DB is unavailable.");
+        return QStringLiteral("Firefox profile found, but cookies.sqlite is missing or unreadable.");
     }
     if (normalizedCode == QStringLiteral("cookies_not_found")) {
         return QStringLiteral("No cookies found for this service.");
@@ -348,7 +407,7 @@ QString BrowserCookieExtractor::connectionMessage(const QString &service, const 
         return QStringLiteral("Session cookies missing or expired. Sign in again.");
     }
     if (normalizedCode == QStringLiteral("unsupported_browser")) {
-        return QStringLiteral("Only Firefox is supported currently.");
+        return QStringLiteral("Browser Sync currently supports Firefox only.");
     }
     if (normalizedCode == QStringLiteral("unknown_service")) {
         return QStringLiteral("Unknown service.");

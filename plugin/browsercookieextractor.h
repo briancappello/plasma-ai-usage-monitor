@@ -29,6 +29,7 @@ class BrowserCookieExtractor : public QObject
 
     Q_PROPERTY(int browserType READ browserType WRITE setBrowserType NOTIFY browserTypeChanged)
     Q_PROPERTY(bool hasFirefoxProfile READ hasFirefoxProfile NOTIFY profilesChanged)
+    Q_PROPERTY(QString selectedFirefoxProfile READ selectedFirefoxProfile WRITE setSelectedFirefoxProfile NOTIFY selectedFirefoxProfileChanged)
 
 public:
     enum BrowserType {
@@ -43,6 +44,8 @@ public:
     int browserType() const;
     void setBrowserType(int type);
     bool hasFirefoxProfile() const;
+    QString selectedFirefoxProfile() const;
+    void setSelectedFirefoxProfile(const QString &profile);
 
     /**
      * Get the path to the active browser's cookie database.
@@ -92,9 +95,11 @@ public:
 Q_SIGNALS:
     void browserTypeChanged();
     void profilesChanged();
+    void selectedFirefoxProfileChanged();
 
 private:
     QString firefoxProfilePath() const;
+    QString firefoxProfilePathByName(const QString &profileName) const;
     QString chromeProfilePath() const;
     QString chromiumProfilePath() const;
 
@@ -108,6 +113,7 @@ private:
     mutable QMap<QString, QString> m_cachedCookies;
     mutable qint64 m_cacheTimestamp = 0;
     static constexpr int CACHE_TTL_MS = 3000; // 3 seconds
+    QString m_selectedFirefoxProfile;
 };
 
 #endif // BROWSERCOOKIEEXTRACTOR_H
