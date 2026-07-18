@@ -562,6 +562,8 @@ PlasmaExtras.Representation {
                         SubscriptionToolCard {
                             Layout.fillWidth: true
                             Layout.columnSpan: liveGrid.columns
+                            Layout.leftMargin: Kirigami.Units.smallSpacing
+                            Layout.rightMargin: Kirigami.Units.smallSpacing
                             visible: modelData.enabled
                             toolName: modelData.name
                             toolIcon: modelData.monitor?.iconName ?? "utilities-terminal"

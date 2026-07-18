@@ -231,47 +231,6 @@ ColumnLayout {
                 visible: !toolCard.collapsed && (toolCard.monitor?.installed ?? false)
             }
 
-            // ═══ Session info (Claude: current session % used) ═══
-            ColumnLayout {
-                Layout.fillWidth: true
-                visible: !toolCard.collapsed && (toolCard.monitor?.hasSessionInfo ?? false)
-                spacing: Kirigami.Units.smallSpacing
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    PlasmaComponents.Label {
-                        text: i18n("Current session")
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        opacity: 0.7
-                    }
-                    Item { Layout.fillWidth: true }
-                    PlasmaComponents.Label {
-                        text: Math.round(toolCard.monitor?.sessionPercentUsed ?? 0) + "% " + i18n("used")
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        font.bold: true
-                        color: usageColor(toolCard.monitor?.sessionPercentUsed ?? 0)
-                    }
-                }
-
-                QQC2.ProgressBar {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 4
-                    from: 0; to: 100
-                    value: toolCard.monitor?.sessionPercentUsed ?? 0
-
-                    background: Rectangle {
-                        implicitHeight: 4; radius: 2
-                        color: Qt.alpha(Kirigami.Theme.textColor, 0.1)
-                    }
-                    contentItem: Rectangle {
-                        width: parent.visualPosition * parent.width
-                        height: 4; radius: 2
-                        color: usageColor(toolCard.monitor?.sessionPercentUsed ?? 0)
-                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-                    }
-                }
-            }
-
             // ═══ Primary usage bar ═══
             ColumnLayout {
                 Layout.fillWidth: true
@@ -453,6 +412,13 @@ ColumnLayout {
                                 Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
                                 Behavior on color { ColorAnimation { duration: 300 } }
                             }
+                        }
+
+                        PlasmaComponents.Label {
+                            text: (modelData.percent ?? 0) + "% " + i18n("used")
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            opacity: 0.4
+                            color: usageColor(modelData.percent ?? 0)
                         }
                     }
                 }
