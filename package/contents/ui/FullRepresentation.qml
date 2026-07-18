@@ -561,6 +561,7 @@ PlasmaExtras.Representation {
 
                         SubscriptionToolCard {
                             Layout.fillWidth: true
+                            Layout.columnSpan: liveGrid.columns
                             visible: modelData.enabled
                             toolName: modelData.name
                             toolIcon: modelData.monitor?.iconName ?? "utilities-terminal"
