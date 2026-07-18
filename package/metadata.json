@@ -9,12 +9,13 @@
         "Category": "System Information",
         "Copyright": "© 2025-2026 Loofi",
         "Description": "Monitor AI API token usage, rate limits, costs, and budgets across multiple providers",
-        "Icon": "cpu",
+        "Icon": "com.github.loofi.aiusagemonitor",
         "Id": "com.github.loofi.aiusagemonitor",
         "License": "GPL-3.0-or-later",
         "Name": "AI Usage Monitor",
-        "Version": "3.1.0",
-        "Website": "https://github.com/loofitheboss/plasma-ai-usage-monitor"
+        "Version": "4.2.0",
+        "Website": "https://github.com/multidraxter-bit/plasma-ai-usage-monitor",
+        "BugReportUrl": "https://github.com/multidraxter-bit/plasma-ai-usage-monitor/issues"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "KPackageStructure": "Plasma/Applet"

@@ -21,9 +21,16 @@ PlasmoidItem {
             var p = providers[i];
             if (p.enabled && p.backend.connected) {
                 var info = p.name + ": ";
-                if (p.backend.cost > 0)
-                    info += "$" + p.backend.cost.toFixed(2) + " | ";
-                info += p.backend.rateLimitRequestsRemaining + " req left";
+                if (p.configKey === "loofi") {
+                    info += (p.backend.activeModel || i18n("No model")) + " | ";
+                    info += (p.backend.trainingStage || i18n("idle")) + " | ";
+                    info += i18n("GPU %1%", Math.round(Math.max(0, p.backend.gpuMemoryPct || 0))) + " | ";
+                    info += i18n("%1 req/24h", formatCompactMetric(p.backend.requestCount || 0));
+                } else {
+                    if (p.backend.cost > 0)
+                        info += "$" + p.backend.cost.toFixed(2) + " | ";
+                    info += p.backend.rateLimitRequestsRemaining + " req left";
+                }
                 lines.push(info);
             }
         }
@@ -42,6 +49,9 @@ PlasmoidItem {
     property alias together: togetherBackend
     property alias cohere: cohereBackend
     property alias googleveo: googleveoBackend
+    property alias azure: azureBackend
+    property alias loofi: loofiBackend
+    property alias ollama: ollamaBackend
     property alias usageDb: usageDatabase
 
     // Subscription tool monitors
@@ -49,9 +59,14 @@ PlasmoidItem {
     property alias openCode: openCodeMonitor
     property alias codexCli: codexCliMonitor
     property alias copilot: copilotMonitor
+    property alias cursor: cursorMonitor
+    property alias windsurf: windsurfMonitor
 
     // Notification cooldown tracking
     property var lastNotificationTimes: ({})
+    readonly property string brandedNotificationIcon: "com.github.loofi.aiusagemonitor"
+    readonly property string warningNotificationIcon: "dialog-warning"
+    readonly property string errorNotificationIcon: "dialog-error"
 
     // ── Secrets Manager (KWallet) ──
     SecretsManager {
@@ -80,6 +95,16 @@ PlasmoidItem {
         customBaseUrl: plasmoid.configuration.openaiCustomBaseUrl
         dailyBudget: plasmoid.configuration.openaiDailyBudget / 100.0
         monthlyBudget: plasmoid.configuration.openaiMonthlyBudget / 100.0
+        budgetWarningPercent: plasmoid.configuration.budgetWarningPercent
+    }
+
+    AzureOpenAIProvider {
+        id: azureBackend
+        model: plasmoid.configuration.azureModel
+        deploymentId: plasmoid.configuration.azureDeploymentId
+        customBaseUrl: plasmoid.configuration.azureCustomBaseUrl
+        dailyBudget: plasmoid.configuration.azureDailyBudget / 100.0
+        monthlyBudget: plasmoid.configuration.azureMonthlyBudget / 100.0
         budgetWarningPercent: plasmoid.configuration.budgetWarningPercent
     }
 
@@ -175,12 +200,23 @@ PlasmoidItem {
         budgetWarningPercent: plasmoid.configuration.budgetWarningPercent
     }
 
+    LoofiServerProvider {
+        id: loofiBackend
+        customBaseUrl: plasmoid.configuration.loofiServerUrl
+    }
+
+    OllamaProvider {
+        id: ollamaBackend
+        customBaseUrl: plasmoid.configuration.ollamaServerUrl
+    }
+
     // ── Subscription Tool Monitors ──
 
     // Browser cookie extractor for sync
     BrowserCookieExtractor {
         id: browserCookies
         browserType: plasmoid.configuration.browserSyncBrowser
+        selectedFirefoxProfile: plasmoid.configuration.browserSyncProfile
     }
 
     // Browser sync timer
@@ -215,6 +251,9 @@ PlasmoidItem {
         }
         onLimitReached: function(tool) {
             handleToolLimitReached(tool);
+        }
+        onSyncDiagnostic: function(toolName, code, message) {
+            handleToolSyncDiagnostic(toolName, code, message);
         }
         onUsageUpdated: {
             recordToolUsageSnapshot(claudeCodeMonitor);
@@ -272,6 +311,9 @@ PlasmoidItem {
         onLimitReached: function(tool) {
             handleToolLimitReached(tool);
         }
+        onSyncDiagnostic: function(toolName, code, message) {
+            handleToolSyncDiagnostic(toolName, code, message);
+        }
         onUsageUpdated: {
             recordToolUsageSnapshot(codexCliMonitor);
         }
@@ -305,8 +347,63 @@ PlasmoidItem {
         onLimitReached: function(tool) {
             handleToolLimitReached(tool);
         }
+        onSyncDiagnostic: function(toolName, code, message) {
+            handleToolSyncDiagnostic(toolName, code, message);
+        }
         onUsageUpdated: {
             recordToolUsageSnapshot(copilotMonitor);
+        }
+    }
+
+    CursorMonitor {
+        id: cursorMonitor
+        enabled: plasmoid.configuration.cursorEnabled
+        usageLimit: plasmoid.configuration.cursorCustomLimit
+
+        Component.onCompleted: {
+            checkToolInstalled();
+            var plans = availablePlans();
+            var idx = plasmoid.configuration.cursorPlan;
+            if (idx >= 0 && idx < plans.length) {
+                planTier = plans[idx];
+                if (usageLimit === 0) usageLimit = defaultLimitForPlan(plans[idx]);
+            }
+        }
+
+        onLimitWarning: function(tool, percent) {
+            handleToolLimitWarning(tool, percent);
+        }
+        onLimitReached: function(tool) {
+            handleToolLimitReached(tool);
+        }
+        onUsageUpdated: {
+            recordToolUsageSnapshot(cursorMonitor);
+        }
+    }
+
+    WindsurfMonitor {
+        id: windsurfMonitor
+        enabled: plasmoid.configuration.windsurfEnabled
+        usageLimit: plasmoid.configuration.windsurfCustomLimit
+
+        Component.onCompleted: {
+            checkToolInstalled();
+            var plans = availablePlans();
+            var idx = plasmoid.configuration.windsurfPlan;
+            if (idx >= 0 && idx < plans.length) {
+                planTier = plans[idx];
+                if (usageLimit === 0) usageLimit = defaultLimitForPlan(plans[idx]);
+            }
+        }
+
+        onLimitWarning: function(tool, percent) {
+            handleToolLimitWarning(tool, percent);
+        }
+        onLimitReached: function(tool) {
+            handleToolLimitReached(tool);
+        }
+        onUsageUpdated: {
+            recordToolUsageSnapshot(windsurfMonitor);
         }
     }
 
@@ -317,7 +414,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "quotaWarning"
         title: i18n("AI Usage Monitor - Subscription")
-        iconName: "dialog-warning"
+        iconName: root.warningNotificationIcon
     }
 
     // ── KDE Notifications ──
@@ -327,7 +424,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "quotaWarning"
         title: i18n("AI Usage Monitor")
-        iconName: "dialog-warning"
+        iconName: root.warningNotificationIcon
     }
 
     Notification {
@@ -335,7 +432,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "apiError"
         title: i18n("AI Usage Monitor")
-        iconName: "dialog-error"
+        iconName: root.errorNotificationIcon
     }
 
     Notification {
@@ -343,7 +440,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "budgetWarning"
         title: i18n("AI Usage Monitor - Budget")
-        iconName: "wallet-open"
+        iconName: root.brandedNotificationIcon
     }
 
     Notification {
@@ -351,7 +448,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "providerDisconnected"
         title: i18n("AI Usage Monitor")
-        iconName: "network-disconnect"
+        iconName: root.brandedNotificationIcon
     }
 
     Notification {
@@ -359,7 +456,7 @@ PlasmoidItem {
         componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
         eventId: "updateAvailable"
         title: i18n("AI Usage Monitor - Update Available")
-        iconName: "update-none"
+        iconName: root.brandedNotificationIcon
     }
 
     // ── Update Checker ──
@@ -391,6 +488,10 @@ PlasmoidItem {
         return (providerInterval > 0 ? providerInterval : plasmoid.configuration.refreshInterval) * 1000;
     }
 
+    function canRefreshBackend(backend, requiresApiKey) {
+        return backend && (!requiresApiKey || backend.hasApiKey());
+    }
+
     // Per-provider refresh timers
     Timer {
         id: openaiRefreshTimer
@@ -398,7 +499,7 @@ PlasmoidItem {
         running: plasmoid.configuration.openaiEnabled
         repeat: true
         onTriggered: {
-            if (openaiBackend.hasApiKey()) openaiBackend.refresh();
+            if (canRefreshBackend(openaiBackend, true)) openaiBackend.refresh();
         }
     }
     Timer {
@@ -407,7 +508,7 @@ PlasmoidItem {
         running: plasmoid.configuration.anthropicEnabled
         repeat: true
         onTriggered: {
-            if (anthropicBackend.hasApiKey()) anthropicBackend.refresh();
+            if (canRefreshBackend(anthropicBackend, true)) anthropicBackend.refresh();
         }
     }
     Timer {
@@ -416,7 +517,7 @@ PlasmoidItem {
         running: plasmoid.configuration.googleEnabled
         repeat: true
         onTriggered: {
-            if (googleBackend.hasApiKey()) googleBackend.refresh();
+            if (canRefreshBackend(googleBackend, true)) googleBackend.refresh();
         }
     }
     Timer {
@@ -425,7 +526,7 @@ PlasmoidItem {
         running: plasmoid.configuration.mistralEnabled
         repeat: true
         onTriggered: {
-            if (mistralBackend.hasApiKey()) mistralBackend.refresh();
+            if (canRefreshBackend(mistralBackend, true)) mistralBackend.refresh();
         }
     }
     Timer {
@@ -434,7 +535,7 @@ PlasmoidItem {
         running: plasmoid.configuration.deepseekEnabled
         repeat: true
         onTriggered: {
-            if (deepseekBackend.hasApiKey()) deepseekBackend.refresh();
+            if (canRefreshBackend(deepseekBackend, true)) deepseekBackend.refresh();
         }
     }
     Timer {
@@ -443,7 +544,7 @@ PlasmoidItem {
         running: plasmoid.configuration.groqEnabled
         repeat: true
         onTriggered: {
-            if (groqBackend.hasApiKey()) groqBackend.refresh();
+            if (canRefreshBackend(groqBackend, true)) groqBackend.refresh();
         }
     }
     Timer {
@@ -452,7 +553,7 @@ PlasmoidItem {
         running: plasmoid.configuration.xaiEnabled
         repeat: true
         onTriggered: {
-            if (xaiBackend.hasApiKey()) xaiBackend.refresh();
+            if (canRefreshBackend(xaiBackend, true)) xaiBackend.refresh();
         }
     }
     Timer {
@@ -461,7 +562,7 @@ PlasmoidItem {
         running: plasmoid.configuration.openrouterEnabled
         repeat: true
         onTriggered: {
-            if (openrouterBackend.hasApiKey()) openrouterBackend.refresh();
+            if (canRefreshBackend(openrouterBackend, true)) openrouterBackend.refresh();
         }
     }
     Timer {
@@ -470,7 +571,7 @@ PlasmoidItem {
         running: plasmoid.configuration.togetherEnabled
         repeat: true
         onTriggered: {
-            if (togetherBackend.hasApiKey()) togetherBackend.refresh();
+            if (canRefreshBackend(togetherBackend, true)) togetherBackend.refresh();
         }
     }
     Timer {
@@ -479,7 +580,7 @@ PlasmoidItem {
         running: plasmoid.configuration.cohereEnabled
         repeat: true
         onTriggered: {
-            if (cohereBackend.hasApiKey()) cohereBackend.refresh();
+            if (canRefreshBackend(cohereBackend, true)) cohereBackend.refresh();
         }
     }
     Timer {
@@ -488,7 +589,34 @@ PlasmoidItem {
         running: plasmoid.configuration.googleveoEnabled
         repeat: true
         onTriggered: {
-            if (googleveoBackend.hasApiKey()) googleveoBackend.refresh();
+            if (canRefreshBackend(googleveoBackend, true)) googleveoBackend.refresh();
+        }
+    }
+    Timer {
+        id: azureRefreshTimer
+        interval: effectiveInterval(plasmoid.configuration.azureRefreshInterval)
+        running: plasmoid.configuration.azureEnabled
+        repeat: true
+        onTriggered: {
+            if (canRefreshBackend(azureBackend, true)) azureBackend.refresh();
+        }
+    }
+    Timer {
+        id: loofiRefreshTimer
+        interval: effectiveInterval(plasmoid.configuration.loofiRefreshInterval)
+        running: plasmoid.configuration.loofiEnabled
+        repeat: true
+        onTriggered: {
+            if (canRefreshBackend(loofiBackend, false)) loofiBackend.refresh();
+        }
+    }
+    Timer {
+        id: ollamaRefreshTimer
+        interval: (plasmoid.configuration.ollamaRefreshInterval || 30) * 1000
+        running: plasmoid.configuration.ollamaEnabled
+        repeat: true
+        onTriggered: {
+            if (canRefreshBackend(ollamaBackend, false)) ollamaBackend.refresh();
         }
     }
 
@@ -523,6 +651,8 @@ PlasmoidItem {
     // ── Helper: all provider info ──
 
     readonly property var allProviders: [
+        { name: "Ollama", dbName: "Ollama", configKey: "ollama", backend: ollamaBackend, enabled: plasmoid.configuration.ollamaEnabled, color: "#9B9B9B", requiresApiKey: false },
+        { name: "Loofi Server", dbName: "LoofiServer", configKey: "loofi", backend: loofiBackend, enabled: plasmoid.configuration.loofiEnabled, color: "#FF6B35", requiresApiKey: false },
         { name: "OpenAI", dbName: "OpenAI", configKey: "openai", backend: openaiBackend, enabled: plasmoid.configuration.openaiEnabled, color: "#10A37F" },
         { name: "Anthropic", dbName: "Anthropic", configKey: "anthropic", backend: anthropicBackend, enabled: plasmoid.configuration.anthropicEnabled, color: "#D4A574" },
         { name: "Google Gemini", dbName: "Google", configKey: "google", backend: googleBackend, enabled: plasmoid.configuration.googleEnabled, color: "#4285F4" },
@@ -533,14 +663,17 @@ PlasmoidItem {
         { name: "OpenRouter", dbName: "OpenRouter", configKey: "openrouter", backend: openrouterBackend, enabled: plasmoid.configuration.openrouterEnabled, color: "#6366F1" },
         { name: "Together AI", dbName: "Together", configKey: "together", backend: togetherBackend, enabled: plasmoid.configuration.togetherEnabled, color: "#0EA5E9" },
         { name: "Cohere", dbName: "Cohere", configKey: "cohere", backend: cohereBackend, enabled: plasmoid.configuration.cohereEnabled, color: "#39D353" },
-        { name: "Google Veo", dbName: "GoogleVeo", configKey: "googleveo", backend: googleveoBackend, enabled: plasmoid.configuration.googleveoEnabled, color: "#EA4335" }
+        { name: "Google Veo", dbName: "GoogleVeo", configKey: "googleveo", backend: googleveoBackend, enabled: plasmoid.configuration.googleveoEnabled, color: "#EA4335" },
+        { name: "Azure OpenAI", dbName: "AzureOpenAI", configKey: "azure", backend: azureBackend, enabled: plasmoid.configuration.azureEnabled, color: "#0078D4" }
     ]
 
     readonly property var allSubscriptionTools: [
         { name: "Claude Code", monitor: claudeCodeMonitor, enabled: plasmoid.configuration.claudeCodeEnabled, notify: plasmoid.configuration.claudeCodeNotifications },
         { name: "OpenCode", monitor: openCodeMonitor, enabled: plasmoid.configuration.openCodeEnabled, notify: plasmoid.configuration.openCodeNotifications },
         { name: "Codex CLI", monitor: codexCliMonitor, enabled: plasmoid.configuration.codexEnabled, notify: plasmoid.configuration.codexNotifications },
-        { name: "GitHub Copilot", monitor: copilotMonitor, enabled: plasmoid.configuration.copilotEnabled, notify: plasmoid.configuration.copilotNotifications }
+        { name: "GitHub Copilot", monitor: copilotMonitor, enabled: plasmoid.configuration.copilotEnabled, notify: plasmoid.configuration.copilotNotifications },
+        { name: "Cursor AI", monitor: cursorMonitor, enabled: plasmoid.configuration.cursorEnabled, notify: plasmoid.configuration.cursorNotifications },
+        { name: "Windsurf", monitor: windsurfMonitor, enabled: plasmoid.configuration.windsurfEnabled, notify: plasmoid.configuration.windsurfNotifications }
     ]
 
     readonly property int enabledToolCount: {
@@ -565,14 +698,41 @@ PlasmoidItem {
             if (allProviders[i].enabled && allProviders[i].backend.connected)
                 total += allProviders[i].backend.cost;
         }
+        for (var j = 0; j < allSubscriptionTools.length; j++) {
+            if (allSubscriptionTools[j].enabled
+                && allSubscriptionTools[j].monitor
+                && allSubscriptionTools[j].monitor.hasSubscriptionCost) {
+                total += allSubscriptionTools[j].monitor.subscriptionCost;
+            }
+        }
         return total;
     }
 
+    readonly property double totalMonthlyCost: {
+        var total = 0;
+        for (var i = 0; i < allProviders.length; i++) {
+            if (allProviders[i].enabled && allProviders[i].backend.connected)
+                total += allProviders[i].backend.monthlyCost;
+        }
+        return total;
+    }
+
+    property double totalMonthlyProjection: 0.0
+
     // ── Functions ──
+
+    function formatCompactMetric(value) {
+        if (value >= 1000000)
+            return (value / 1000000).toFixed(1) + "M";
+        if (value >= 1000)
+            return (value / 1000).toFixed(1) + "K";
+        return value.toString();
+    }
 
     function refreshAll() {
         for (var i = 0; i < allProviders.length; i++) {
-            if (allProviders[i].enabled && allProviders[i].backend.hasApiKey()) {
+            var provider = allProviders[i];
+            if (provider.enabled && canRefreshBackend(provider.backend, provider.requiresApiKey !== false)) {
                 allProviders[i].backend.refresh();
             }
         }
@@ -580,7 +740,7 @@ PlasmoidItem {
 
     function loadApiKeys() {
         for (var i = 0; i < allProviders.length; i++) {
-            if (allProviders[i].enabled) {
+            if (allProviders[i].enabled && allProviders[i].requiresApiKey !== false) {
                 var key = secrets.getKey(allProviders[i].configKey);
                 if (key) allProviders[i].backend.setApiKey(key);
             }
@@ -605,6 +765,31 @@ PlasmoidItem {
             backend.rateLimitTokens,
             backend.rateLimitTokensRemaining
         );
+    }
+
+    function calculateMonthlyProjection() {
+        if (!usageDatabase.enabled) return;
+
+        var now = new Date();
+        var sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        var avgDailySum = 0;
+        var providers = allProviders;
+
+        for (var i = 0; i < providers.length; i++) {
+            if (providers[i].enabled) {
+                var summary = usageDatabase.getSummary(providers[i].dbName, sevenDaysAgo, now);
+                if (summary && summary.avgDailyCost) {
+                    avgDailySum += summary.avgDailyCost;
+                }
+            }
+        }
+
+        // Days remaining in month
+        var lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        var daysRemaining = Math.max(0, lastDay - now.getDate());
+
+        totalMonthlyProjection = totalMonthlyCost + (avgDailySum * daysRemaining);
     }
 
     // Connect common signal handlers for all providers (avoids 7× copy-paste)
@@ -636,6 +821,7 @@ PlasmoidItem {
     function makeSnapshotHandler(dbName, backend) {
         return function() {
             recordProviderSnapshot(dbName, backend);
+            calculateMonthlyProjection(); // Trigger update
         };
     }
 
@@ -736,7 +922,7 @@ PlasmoidItem {
         if (!canNotify("disconnect_" + provider)) return;
 
         connectionNotification.eventId = "providerDisconnected";
-        connectionNotification.iconName = "network-disconnect";
+        connectionNotification.iconName = root.brandedNotificationIcon;
         connectionNotification.text = i18n("%1 has disconnected", provider);
         connectionNotification.urgency = Notification.NormalUrgency;
         connectionNotification.sendEvent();
@@ -748,7 +934,7 @@ PlasmoidItem {
         if (!canNotify("reconnect_" + provider)) return;
 
         connectionNotification.eventId = "providerReconnected";
-        connectionNotification.iconName = "network-connect";
+        connectionNotification.iconName = root.brandedNotificationIcon;
         connectionNotification.text = i18n("%1 has reconnected", provider);
         connectionNotification.urgency = Notification.LowUrgency;
         connectionNotification.sendEvent();
@@ -788,6 +974,34 @@ PlasmoidItem {
         subscriptionNotification.sendEvent();
     }
 
+    function isToolNotificationEnabled(toolName) {
+        var tools = allSubscriptionTools;
+        for (var i = 0; i < tools.length; i++) {
+            if (tools[i].name === toolName) {
+                return tools[i].notify;
+            }
+        }
+        return true;
+    }
+
+    function handleToolSyncDiagnostic(toolName, code, message) {
+        if (!plasmoid.configuration.alertsEnabled) return;
+        if (!isToolNotificationEnabled(toolName)) return;
+        if (code === "not_logged_in" || code === "cookies_not_found") return;
+        if (!canNotify("tool_sync_" + toolName + "_" + code)) return;
+
+        var severity = Notification.LowUrgency;
+        if (code === "session_expired" || code === "format_changed" || code === "organization_missing") {
+            severity = Notification.CriticalUrgency;
+        } else if (code === "network_error" || code === "invalid_response" || code === "unsupported_browser") {
+            severity = Notification.NormalUrgency;
+        }
+
+        subscriptionNotification.text = i18n("%1 sync: %2", toolName, message);
+        subscriptionNotification.urgency = severity;
+        subscriptionNotification.sendEvent();
+    }
+
     function recordToolUsageSnapshot(monitor) {
         if (!usageDatabase.enabled) return;
         usageDatabase.recordToolSnapshot(
@@ -808,9 +1022,7 @@ PlasmoidItem {
         // Sync Claude Code (claude.ai cookies)
         if (plasmoid.configuration.claudeCodeEnabled && claudeCodeMonitor.installed) {
             var claudeHeader = browserCookies.getCookieHeader("claude.ai");
-            if (claudeHeader.length > 0) {
-                claudeCodeMonitor.syncFromBrowser(claudeHeader, plasmoid.configuration.browserSyncBrowser);
-            }
+            claudeCodeMonitor.syncFromBrowser(claudeHeader, plasmoid.configuration.browserSyncBrowser);
         }
 
         // Sync OpenCode (claude.ai cookies — same subscription)
@@ -824,9 +1036,7 @@ PlasmoidItem {
         // Sync Codex CLI (chatgpt.com cookies)
         if (plasmoid.configuration.codexEnabled && codexCliMonitor.installed) {
             var codexHeader = browserCookies.getCookieHeader("chatgpt.com");
-            if (codexHeader.length > 0) {
-                codexCliMonitor.syncFromBrowser(codexHeader, plasmoid.configuration.browserSyncBrowser);
-            }
+            codexCliMonitor.syncFromBrowser(codexHeader, plasmoid.configuration.browserSyncBrowser);
         }
     }
 
@@ -836,13 +1046,15 @@ PlasmoidItem {
         // Wire up shared signal handlers for all providers
         connectProviderSignals();
 
-        if (secrets.walletOpen) {
-            loadApiKeys();
-        }
         // Eagerly initialize database (avoids blocking on first write)
         usageDatabase.init();
-        // Initial prune of old data
-        usageDatabase.pruneOldData();
+
+        // Delay data fetching slightly to not block UI loading
+        startupTimer.start();
+
+        // Delay initial prune
+        initialPruneTimer.start();
+
         // Initial browser sync after a short delay
         if (plasmoid.configuration.browserSyncEnabled) {
             initialSyncTimer.start();
@@ -850,10 +1062,38 @@ PlasmoidItem {
     }
 
     Timer {
+        id: startupTimer
+        interval: 200 // 200ms delay for startup data fetch
+        repeat: false
+        onTriggered: {
+            if (secrets.walletOpen) {
+                loadApiKeys();
+            } else {
+                refreshAll();
+            }
+        }
+    }
+
+    Timer {
+        id: initialPruneTimer
+        interval: 2000 // 2 second delay for initial prune
+        repeat: false
+        onTriggered: usageDatabase.pruneOldData()
+    }
+
+    Timer {
         id: initialSyncTimer
-        interval: 5000 // 5 second delay for startup
+        interval: 5000 // 5 second delay for sync
         repeat: false
         onTriggered: performBrowserSync()
+    }
+
+    Timer {
+        id: projectionStartupTimer
+        interval: 1000
+        running: true
+        repeat: false
+        onTriggered: calculateMonthlyProjection()
     }
 
     // React to config changes
@@ -868,6 +1108,18 @@ PlasmoidItem {
         function onGroqEnabledChanged() { loadApiKeys(); }
         function onXaiEnabledChanged() { loadApiKeys(); }
         function onGoogleveoEnabledChanged() { loadApiKeys(); }
+        function onAzureEnabledChanged() { loadApiKeys(); }
+        function onLoofiEnabledChanged() { refreshAll(); }
+        function onOllamaEnabledChanged() { refreshAll(); }
+        function onLoofiServerUrlChanged() {
+            if (plasmoid.configuration.loofiEnabled) loofiBackend.refresh();
+        }
+        function onOllamaServerUrlChanged() {
+            if (plasmoid.configuration.ollamaEnabled) ollamaBackend.refresh();
+        }
+        function onBrowserSyncProfileChanged() {
+            browserCookies.selectedFirefoxProfile = plasmoid.configuration.browserSyncProfile;
+        }
 
         function onOpenaiModelChanged() { openaiBackend.model = plasmoid.configuration.openaiModel; }
         function onAnthropicModelChanged() { anthropicBackend.model = plasmoid.configuration.anthropicModel; }
@@ -877,6 +1129,8 @@ PlasmoidItem {
         function onGroqModelChanged() { groqBackend.model = plasmoid.configuration.groqModel; }
         function onXaiModelChanged() { xaiBackend.model = plasmoid.configuration.xaiModel; }
         function onGoogleveoModelChanged() { googleveoBackend.model = plasmoid.configuration.googleveoModel; }
+        function onAzureModelChanged() { azureBackend.model = plasmoid.configuration.azureModel; }
+        function onAzureDeploymentIdChanged() { azureBackend.deploymentId = plasmoid.configuration.azureDeploymentId; }
 
         function onRefreshIntervalChanged() {
             // The per-provider Timer declarations use declarative bindings
@@ -900,6 +1154,14 @@ PlasmoidItem {
         function onCopilotEnabledChanged() {
             copilotMonitor.enabled = plasmoid.configuration.copilotEnabled;
             if (copilotMonitor.enabled) copilotMonitor.checkToolInstalled();
+        }
+        function onCursorEnabledChanged() {
+            cursorMonitor.enabled = plasmoid.configuration.cursorEnabled;
+            if (cursorMonitor.enabled) cursorMonitor.checkToolInstalled();
+        }
+        function onWindsurfEnabledChanged() {
+            windsurfMonitor.enabled = plasmoid.configuration.windsurfEnabled;
+            if (windsurfMonitor.enabled) windsurfMonitor.checkToolInstalled();
         }
     }
 }

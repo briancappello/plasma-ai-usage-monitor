@@ -4,6 +4,44 @@
 #include <QUrlQuery>
 #include <QDebug>
 
+namespace {
+double extractDurationSeconds(const QJsonObject &payload)
+{
+    const QJsonObject usage = payload.value(QStringLiteral("usage")).toObject();
+    const QJsonObject metadata = payload.value(QStringLiteral("metadata")).toObject();
+
+    const auto readPositive = [](const QJsonObject &obj, const char *key) -> double {
+        if (obj.isEmpty()) {
+            return 0.0;
+        }
+        return qMax(0.0, obj.value(QLatin1String(key)).toDouble(0.0));
+    };
+
+    const double usageDuration = qMax(
+        readPositive(usage, "video_duration_seconds"),
+        qMax(readPositive(usage, "duration_seconds"), readPositive(usage, "generated_seconds")));
+    if (usageDuration > 0.0) {
+        return usageDuration;
+    }
+
+    const double payloadDuration = qMax(
+        readPositive(payload, "video_duration_seconds"),
+        qMax(readPositive(payload, "duration_seconds"), readPositive(payload, "generated_seconds")));
+    if (payloadDuration > 0.0) {
+        return payloadDuration;
+    }
+
+    return qMax(
+        readPositive(metadata, "video_duration_seconds"),
+        qMax(readPositive(metadata, "duration_seconds"), readPositive(metadata, "generated_seconds")));
+}
+
+double modelCostPerSecond(const QString &model)
+{
+    return model.contains(QStringLiteral("veo-2")) ? 0.35 : 0.50;
+}
+} // namespace
+
 GoogleVeoProvider::GoogleVeoProvider(QObject *parent)
     : ProviderBackend(parent)
 {
@@ -93,8 +131,64 @@ void GoogleVeoProvider::onModelInfoReply(QNetworkReply *reply)
         return;
     }
 
-    // A successful response confirms the key and model are valid.
-    applyKnownLimits();
+    const QByteArray data = reply->readAll();
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull() || !doc.isObject()) {
+        setError(i18n("Unexpected API response format"));
+        setLoading(false);
+        setConnected(false);
+        updateLastRefreshed();
+        Q_EMIT dataUpdated();
+        return;
+    }
+
+    // Reset limits first so partial headers cannot leave stale values from prior refreshes.
+    setRateLimitRequests(0);
+    setRateLimitRequestsRemaining(0);
+    setRateLimitTokens(0);
+    setRateLimitTokensRemaining(0);
+    setRateLimitResetTime(QString());
+
+    // Prefer provider-provided rate-limit headers when both request-limit and remaining are present.
+    const bool hasRequestLimitHeader = !reply->rawHeader("x-ratelimit-limit-requests").isEmpty();
+    const bool hasRequestRemainingHeader = !reply->rawHeader("x-ratelimit-remaining-requests").isEmpty();
+    parseRateLimitHeaders(reply);
+    if (!(hasRequestLimitHeader && hasRequestRemainingHeader) || rateLimitRequests() <= 0) {
+        applyKnownLimits();
+    }
+
+    const ProviderBackend::NormalizedUsageCost normalized =
+        ProviderBackend::normalizeUsageCost(ProviderBackend::ProviderId::GoogleVeo, doc.object());
+
+    if (normalized.parsed) {
+        setInputTokens(normalized.inputTokens);
+        setOutputTokens(normalized.outputTokens);
+        setRequestCount(qMax(1, normalized.requestCount));
+
+        if (normalized.cost > 0.0) {
+            setCost(normalized.cost);
+            setDailyCost(normalized.dailyCost > 0.0 ? normalized.dailyCost : normalized.cost);
+            setMonthlyCost(normalized.monthlyCost > 0.0 ? normalized.monthlyCost : normalized.cost);
+        } else {
+            const double durationSeconds = extractDurationSeconds(doc.object());
+            if (durationSeconds > 0.0) {
+                setEstimatedCost(durationSeconds * modelCostPerSecond(m_model));
+            } else {
+                setCost(0.0);
+                updateEstimatedCost(m_model);
+                setDailyCost(cost());
+                setMonthlyCost(cost());
+            }
+        }
+    } else {
+        // Connectivity-only path for model-info endpoint.
+        setInputTokens(0);
+        setOutputTokens(0);
+        setRequestCount(1);
+        setCost(0.0);
+        setDailyCost(0.0);
+        setMonthlyCost(0.0);
+    }
 
     setConnected(true);
     setLoading(false);
@@ -107,31 +201,18 @@ void GoogleVeoProvider::applyKnownLimits()
     // Known rate limits for Veo models (as of 2025-2026)
     bool isPaid = (m_tier == QStringLiteral("paid"));
 
-    if (m_model.contains(QStringLiteral("veo-3"))) {
-        if (isPaid) {
-            setRateLimitRequests(100);
-            setRateLimitRequestsRemaining(100);
-        } else {
-            setRateLimitRequests(5);
-            setRateLimitRequestsRemaining(5);
-        }
-    } else if (m_model.contains(QStringLiteral("veo-2"))) {
-        if (isPaid) {
-            setRateLimitRequests(200);
-            setRateLimitRequestsRemaining(200);
-        } else {
-            setRateLimitRequests(10);
-            setRateLimitRequestsRemaining(10);
-        }
+    if (m_model.contains(QStringLiteral("veo-2"))) {
+        setRateLimitRequests(isPaid ? 200 : 10);
+        setRateLimitRequestsRemaining(isPaid ? 200 : 10);
     } else {
-        if (isPaid) {
-            setRateLimitRequests(100);
-            setRateLimitRequestsRemaining(100);
-        } else {
-            setRateLimitRequests(5);
-            setRateLimitRequestsRemaining(5);
-        }
+        // veo-3 and all other Veo models share the same limits
+        setRateLimitRequests(isPaid ? 100 : 5);
+        setRateLimitRequestsRemaining(isPaid ? 100 : 5);
     }
+
+    // Veo APIs are not token-centric in the same way text LLM APIs are.
+    setRateLimitTokens(0);
+    setRateLimitTokensRemaining(0);
 
     setRateLimitResetTime(isPaid ? QStringLiteral("N/A (paid tier limits)")
                                  : QStringLiteral("N/A (free tier limits)"));

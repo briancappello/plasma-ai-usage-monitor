@@ -26,6 +26,8 @@ KCM.SimpleKCM {
     property alias cfg_groqNotificationsEnabled: groqNotifySwitch.checked
     property alias cfg_xaiNotificationsEnabled: xaiNotifySwitch.checked
     property alias cfg_googleveoNotificationsEnabled: googleveoNotifySwitch.checked
+    property alias cfg_azureNotificationsEnabled: azureNotifySwitch.checked
+    property alias cfg_loofiNotificationsEnabled: loofiNotifySwitch.checked
     property alias cfg_notifyOnUpdate: updateNotifySwitch.checked
     property alias cfg_updateCheckInterval: updateCheckSpinBox.value
 
@@ -132,6 +134,20 @@ KCM.SimpleKCM {
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Groq:"); Layout.preferredWidth: alertsPage.labelWidth } QQC2.Switch { id: groqNotifySwitch; enabled: alertsSwitch.checked; checked: plasmoid.configuration.groqNotificationsEnabled } }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("xAI / Grok:"); Layout.preferredWidth: alertsPage.labelWidth } QQC2.Switch { id: xaiNotifySwitch; enabled: alertsSwitch.checked; checked: plasmoid.configuration.xaiNotificationsEnabled } }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Google Veo:"); Layout.preferredWidth: alertsPage.labelWidth } QQC2.Switch { id: googleveoNotifySwitch; enabled: alertsSwitch.checked; checked: plasmoid.configuration.googleveoNotificationsEnabled } }
+
+        QQC2.Switch {
+            id: azureNotifySwitch
+            Kirigami.FormData.label: i18n("Azure OpenAI:")
+            enabled: alertsSwitch.checked
+            checked: plasmoid.configuration.azureNotificationsEnabled
+        }
+
+        QQC2.Switch {
+            id: loofiNotifySwitch
+            Kirigami.FormData.label: i18n("Loofi Server:")
+            enabled: alertsSwitch.checked
+            checked: plasmoid.configuration.loofiNotificationsEnabled
+        }
 
         // ── Update Notifications ──
         Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }

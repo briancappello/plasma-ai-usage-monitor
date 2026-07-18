@@ -3,6 +3,7 @@
 #include "secretsmanager.h"
 #include "providerbackend.h"
 #include "openaiprovider.h"
+#include "azureopenaiprovider.h"
 #include "anthropicprovider.h"
 #include "googleprovider.h"
 #include "mistralprovider.h"
@@ -21,7 +22,11 @@
 #include "codexclimonitor.h"
 #include "copilotmonitor.h"
 #include "opencodemonitor.h"
+#include "cursormonitor.h"
+#include "windsurfmonitor.h"
 #include "browsercookieextractor.h"
+#include "loofiserverprovider.h"
+#include "ollamaprovider.h"
 
 #include <QQmlEngine>
 #include <QJSEngine>
@@ -38,6 +43,7 @@ void AiUsagePlugin::registerTypes(const char *uri)
     // Register C++ types for use in QML
     qmlRegisterType<SecretsManager>(uri, 1, 0, "SecretsManager");
     qmlRegisterType<OpenAIProvider>(uri, 1, 0, "OpenAIProvider");
+    qmlRegisterType<AzureOpenAIProvider>(uri, 1, 0, "AzureOpenAIProvider");
     qmlRegisterType<AnthropicProvider>(uri, 1, 0, "AnthropicProvider");
     qmlRegisterType<GoogleProvider>(uri, 1, 0, "GoogleProvider");
     qmlRegisterType<MistralProvider>(uri, 1, 0, "MistralProvider");
@@ -57,9 +63,17 @@ void AiUsagePlugin::registerTypes(const char *uri)
     qmlRegisterType<CodexCliMonitor>(uri, 1, 0, "CodexCliMonitor");
     qmlRegisterType<CopilotMonitor>(uri, 1, 0, "CopilotMonitor");
     qmlRegisterType<OpenCodeMonitor>(uri, 1, 0, "OpenCodeMonitor");
+    qmlRegisterType<CursorMonitor>(uri, 1, 0, "CursorMonitor");
+    qmlRegisterType<WindsurfMonitor>(uri, 1, 0, "WindsurfMonitor");
 
     // Browser cookie extraction for sync
     qmlRegisterType<BrowserCookieExtractor>(uri, 1, 0, "BrowserCookieExtractor");
+
+    // Self-hosted Loofi AI server
+    qmlRegisterType<LoofiServerProvider>(uri, 1, 0, "LoofiServerProvider");
+
+    // Ollama
+    qmlRegisterType<OllamaProvider>(uri, 1, 0, "OllamaProvider");
 
     // Register abstract base classes as uncreatable (for type info in QML)
     qmlRegisterUncreatableType<ProviderBackend>(uri, 1, 0, "ProviderBackend",

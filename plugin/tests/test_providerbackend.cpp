@@ -44,6 +44,11 @@ class ProviderBackendTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void testProviderKeyEnumConversionAzure();
+    void testProviderKeyEnumConversionAzureAliases();
+    void testProviderConfigFallbackUnknownDeterministic();
+    void testGoogleVeoNormalizationUsesOpenAiLikeUsage();
+    void testExistingProviderMappingsUnchanged();
     void testBudgetWarningSignal();
     void testBudgetExceededSignal();
     void testBudgetDedupFlags();
@@ -79,6 +84,95 @@ void ProviderBackendTest::testBudgetWarningSignal()
     QCOMPARE(args.at(1).toString(), QStringLiteral("daily"));
     QVERIFY(qAbs(args.at(2).toDouble() - 8.0) < 0.01);
     QVERIFY(qAbs(args.at(3).toDouble() - 10.0) < 0.01);
+}
+
+void ProviderBackendTest::testProviderKeyEnumConversionAzure()
+{
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("azure")),
+             ProviderBackend::ProviderId::AzureOpenAI);
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("azure-openai")),
+             ProviderBackend::ProviderId::AzureOpenAI);
+    QCOMPARE(ProviderBackend::providerKeyFromId(ProviderBackend::ProviderId::AzureOpenAI),
+             QStringLiteral("azure-openai"));
+
+    const ProviderBackend::ProviderConfig azureConfig = ProviderBackend::makeProviderConfig(
+        QStringLiteral("azure-openai"),
+        QStringLiteral("https://example.openai.azure.com"),
+        QStringLiteral("gpt-4o"),
+        QStringLiteral("my-deployment"),
+        QStringLiteral("secret"));
+
+    QCOMPARE(azureConfig.providerId, ProviderBackend::ProviderId::AzureOpenAI);
+    QCOMPARE(azureConfig.providerKey, QStringLiteral("azure-openai"));
+    QCOMPARE(azureConfig.authKeySlot, QStringLiteral("azure_openai_api_key"));
+}
+
+void ProviderBackendTest::testProviderKeyEnumConversionAzureAliases()
+{
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("AZURE_OPENAI")),
+             ProviderBackend::ProviderId::AzureOpenAI);
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral(" Azure ")),
+             ProviderBackend::ProviderId::AzureOpenAI);
+    QCOMPARE(ProviderBackend::defaultAuthKeySlotForProvider(ProviderBackend::ProviderId::AzureOpenAI),
+             QStringLiteral("azure_openai_api_key"));
+}
+
+void ProviderBackendTest::testProviderConfigFallbackUnknownDeterministic()
+{
+    const ProviderBackend::ProviderConfig unknownConfig = ProviderBackend::makeProviderConfig(
+        QStringLiteral("some-future-provider"),
+        QStringLiteral("https://example.invalid"),
+        QStringLiteral("model-x"),
+        QStringLiteral("deployment-x"),
+        QStringLiteral("secret"));
+
+    QCOMPARE(unknownConfig.providerId, ProviderBackend::ProviderId::Unknown);
+    QCOMPARE(unknownConfig.providerKey, QStringLiteral("unknown"));
+    QCOMPARE(unknownConfig.authKeySlot, QStringLiteral("unknown_api_key"));
+
+    const ProviderBackend::NormalizedUsageCost normalized =
+        ProviderBackend::normalizeUsageCost(ProviderBackend::ProviderId::Unknown, QJsonObject{});
+    QVERIFY(!normalized.parsed);
+    QCOMPARE(normalized.inputTokens, 0);
+    QCOMPARE(normalized.outputTokens, 0);
+    QCOMPARE(normalized.requestCount, 0);
+    QCOMPARE(normalized.cost, 0.0);
+}
+
+void ProviderBackendTest::testGoogleVeoNormalizationUsesOpenAiLikeUsage()
+{
+    QJsonObject usage;
+    usage.insert(QStringLiteral("prompt_tokens"), 111);
+    usage.insert(QStringLiteral("completion_tokens"), 22);
+    usage.insert(QStringLiteral("total_tokens"), 133);
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("usage"), usage);
+
+    const ProviderBackend::NormalizedUsageCost normalized =
+        ProviderBackend::normalizeUsageCost(ProviderBackend::ProviderId::GoogleVeo, payload);
+
+    QVERIFY(normalized.parsed);
+    QCOMPARE(normalized.inputTokens, 111);
+    QCOMPARE(normalized.outputTokens, 22);
+    QCOMPARE(normalized.requestCount, 1);
+    QCOMPARE(normalized.cost, 0.0);
+}
+
+void ProviderBackendTest::testExistingProviderMappingsUnchanged()
+{
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("openai")),
+             ProviderBackend::ProviderId::OpenAI);
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("google")),
+             ProviderBackend::ProviderId::Google);
+    QCOMPARE(ProviderBackend::providerIdFromKey(QStringLiteral("xai")),
+             ProviderBackend::ProviderId::XAI);
+    QCOMPARE(ProviderBackend::providerKeyFromId(ProviderBackend::ProviderId::OpenAI),
+             QStringLiteral("openai"));
+    QCOMPARE(ProviderBackend::providerKeyFromId(ProviderBackend::ProviderId::Google),
+             QStringLiteral("google"));
+    QCOMPARE(ProviderBackend::providerKeyFromId(ProviderBackend::ProviderId::XAI),
+             QStringLiteral("xai"));
 }
 
 void ProviderBackendTest::testBudgetExceededSignal()

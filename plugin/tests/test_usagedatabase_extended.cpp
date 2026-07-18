@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QStandardPaths>
 #include <QUuid>
 
 #include "usagedatabase.h"

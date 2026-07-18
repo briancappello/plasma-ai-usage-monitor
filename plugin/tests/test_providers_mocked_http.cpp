@@ -6,13 +6,22 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUrl>
+#include <QJsonObject>
 
 #include "anthropicprovider.h"
 #include "cohereprovider.h"
 #include "deepseekprovider.h"
+#include "googleprovider.h"
+#include "googleveoprovider.h"
+#include "azureopenaiprovider.h"
+#include "loofiserverprovider.h"
+#include "groqprovider.h"
+#include "mistralprovider.h"
 #include "openaiprovider.h"
 #include "openrouterprovider.h"
+#include "providerbackend.h"
 #include "togetherprovider.h"
+#include "xaiprovider.h"
 
 class HttpStubServer : public QObject
 {
@@ -117,9 +126,26 @@ private Q_SLOTS:
     void openAiAuthError();
     void anthropicRateLimitHeaders();
     void deepSeekUsageAndBalance();
+    void googleKnownLimitsByTier();
+    void googleVeoKnownLimitsByTier();
+    void googleVeoUsesHeaderLimitsWhenPresent();
+    void googleVeoPartialHeadersFallbackToKnownLimits();
+    void googleVeoUsagePayloadEstimatedCost();
+    void googleVeoDurationSecondsEstimatedCost();
+    void googleVeoAuthError();
     void openRouterUsageAndCredits();
     void togetherAiUsageAndHeaders();
     void cohereUsageAndHeaders();
+    void mistralUsageAndHeaders();
+    void groqUsageAndHeaders();
+    void xaiUsageAndHeaders();
+    void azureProviderSuccess();
+    void azureProviderMeteredCostPreferred();
+    void azureProviderAuthError();
+    void azureNormalizeHappyPath();
+    void azureNormalizeFailurePath();
+    void loofiServerSummarySuccess();
+    void loofiServerAuthError();
 };
 
 void ProvidersMockedHttpTest::openAiSuccessAndHeaders()
@@ -299,6 +325,272 @@ void ProvidersMockedHttpTest::deepSeekUsageAndBalance()
     QVERIFY(provider.isConnected());
 }
 
+void ProvidersMockedHttpTest::googleKnownLimitsByTier()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/v1beta/models/gemini-2.5-flash:countTokens"),
+        200,
+        QByteArrayLiteral(R"JSON({"totalTokens": 2})JSON"));
+
+    GoogleProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("gemini-2.5-flash"));
+    provider.setTier(QStringLiteral("paid"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.rateLimitRequests(), 2000);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 2000);
+    QCOMPARE(provider.rateLimitTokens(), 4000000);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 4000000);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoKnownLimitsByTier()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray modelInfoBody = R"JSON({
+        "name": "models/veo-2",
+        "displayName": "Veo 2"
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-2"),
+        200,
+        modelInfoBody);
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-2"));
+    provider.setTier(QStringLiteral("free"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.rateLimitRequests(), 10);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 10);
+    QCOMPARE(provider.rateLimitTokens(), 0);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 0);
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoUsesHeaderLimitsWhenPresent()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray modelInfoBody = R"JSON({
+        "name": "models/veo-3",
+        "displayName": "Veo 3"
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-3"),
+        200,
+        modelInfoBody,
+        {
+            {"x-ratelimit-limit-requests", "77"},
+            {"x-ratelimit-remaining-requests", "66"},
+            {"x-ratelimit-limit-tokens", "12345"},
+            {"x-ratelimit-remaining-tokens", "12000"},
+            {"x-ratelimit-reset-requests", "45s"},
+        });
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-3"));
+    provider.setTier(QStringLiteral("paid"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.rateLimitRequests(), 77);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 66);
+    QCOMPARE(provider.rateLimitTokens(), 12345);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 12000);
+    QCOMPARE(provider.rateLimitResetTime(), QStringLiteral("45s"));
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoPartialHeadersFallbackToKnownLimits()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray modelInfoBody = R"JSON({
+        "name": "models/veo-3",
+        "displayName": "Veo 3"
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-3"),
+        200,
+        modelInfoBody,
+        {
+            {"x-ratelimit-limit-requests", "77"},
+            {"x-ratelimit-limit-tokens", "12345"},
+            {"x-ratelimit-remaining-tokens", "12000"},
+        });
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-3"));
+    provider.setTier(QStringLiteral("paid"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    // Missing remaining-requests header should fall back to known tier limits.
+    QCOMPARE(provider.rateLimitRequests(), 100);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 100);
+    QCOMPARE(provider.rateLimitTokens(), 0);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 0);
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoUsagePayloadEstimatedCost()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray modelInfoBody = R"JSON({
+        "name": "models/veo-2",
+        "usage": {
+            "prompt_tokens": 120000,
+            "completion_tokens": 30000,
+            "total_tokens": 150000
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-2"),
+        200,
+        modelInfoBody,
+        {
+            {"x-ratelimit-limit-requests", "44"},
+            {"x-ratelimit-remaining-requests", "40"},
+        });
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-2"));
+    provider.setTier(QStringLiteral("paid"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 120000);
+    QCOMPARE(provider.outputTokens(), 30000);
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(provider.cost() > 0.0);
+    QVERIFY(provider.isEstimatedCost());
+    QCOMPARE(provider.rateLimitRequests(), 44);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 40);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoDurationSecondsEstimatedCost()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray modelInfoBody = R"JSON({
+        "name": "models/veo-2",
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "video_duration_seconds": 8
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-2"),
+        200,
+        modelInfoBody,
+        {
+            {"x-ratelimit-limit-requests", "44"},
+            {"x-ratelimit-remaining-requests", "40"},
+        });
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-2"));
+    provider.setTier(QStringLiteral("paid"));
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 10);
+    QCOMPARE(provider.outputTokens(), 5);
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(qAbs(provider.cost() - 2.8) < 0.000001);
+    QVERIFY(provider.isEstimatedCost());
+    QCOMPARE(provider.rateLimitRequests(), 44);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 40);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::googleVeoAuthError()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray authError = R"JSON({"error":"unauthorized"})JSON";
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/v1beta/models/veo-3"),
+        404,
+        authError);
+
+    GoogleVeoProvider provider;
+    provider.setApiKey(QStringLiteral("bad-key"));
+    provider.setCustomBaseUrl(server.baseUrl() + QStringLiteral("/v1beta"));
+    provider.setModel(QStringLiteral("veo-3"));
+
+    QSignalSpy errorSpy(&provider, &ProviderBackend::errorChanged);
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+    QVERIFY(errorSpy.count() >= 1);
+    QVERIFY(provider.errorCount() >= 1);
+    QVERIFY(!provider.errorString().isEmpty());
+    QVERIFY(!provider.isConnected());
+}
+
 void ProvidersMockedHttpTest::openRouterUsageAndCredits()
 {
     HttpStubServer server;
@@ -442,6 +734,373 @@ void ProvidersMockedHttpTest::cohereUsageAndHeaders()
     QCOMPARE(provider.rateLimitTokens(), 8000);
     QCOMPARE(provider.rateLimitTokensRemaining(), 7700);
     QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::mistralUsageAndHeaders()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray usageBody = R"JSON({
+        "usage": {
+            "prompt_tokens": 90,
+            "completion_tokens": 45
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/chat/completions"),
+        200,
+        usageBody,
+        {
+            {"x-ratelimit-limit-requests", "75"},
+            {"x-ratelimit-remaining-requests", "71"},
+            {"x-ratelimit-limit-tokens", "5000"},
+            {"x-ratelimit-remaining-tokens", "4865"},
+        });
+
+    MistralProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 90);
+    QCOMPARE(provider.outputTokens(), 45);
+    QCOMPARE(provider.requestCount(), 1);
+    QCOMPARE(provider.rateLimitRequests(), 75);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 71);
+    QCOMPARE(provider.rateLimitTokens(), 5000);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 4865);
+    QVERIFY(provider.cost() > 0.0);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::groqUsageAndHeaders()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray usageBody = R"JSON({
+        "usage": {
+            "prompt_tokens": 64,
+            "completion_tokens": 16
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/chat/completions"),
+        200,
+        usageBody,
+        {
+            {"x-ratelimit-limit-requests", "120"},
+            {"x-ratelimit-remaining-requests", "118"},
+            {"x-ratelimit-limit-tokens", "6400"},
+            {"x-ratelimit-remaining-tokens", "6320"},
+        });
+
+    GroqProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 64);
+    QCOMPARE(provider.outputTokens(), 16);
+    QCOMPARE(provider.requestCount(), 1);
+    QCOMPARE(provider.rateLimitRequests(), 120);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 118);
+    QCOMPARE(provider.rateLimitTokens(), 6400);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 6320);
+    QVERIFY(provider.cost() > 0.0);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::xaiUsageAndHeaders()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray usageBody = R"JSON({
+        "usage": {
+            "prompt_tokens": 300,
+            "completion_tokens": 120
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/chat/completions"),
+        200,
+        usageBody,
+        {
+            {"x-ratelimit-limit-requests", "33"},
+            {"x-ratelimit-remaining-requests", "30"},
+            {"x-ratelimit-limit-tokens", "3300"},
+            {"x-ratelimit-remaining-tokens", "2880"},
+        });
+
+    XAIProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 300);
+    QCOMPARE(provider.outputTokens(), 120);
+    QCOMPARE(provider.requestCount(), 1);
+    QCOMPARE(provider.rateLimitRequests(), 33);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 30);
+    QCOMPARE(provider.rateLimitTokens(), 3300);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 2880);
+    QVERIFY(provider.cost() > 0.0);
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::azureProviderSuccess()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray usageBody = R"JSON({
+        "id": "chatcmpl-azure-test",
+        "object": "chat.completion",
+        "usage": {
+            "prompt_tokens": 42,
+            "completion_tokens": 8,
+            "total_tokens": 50
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/openai/deployments/my-deployment/chat/completions"),
+        200,
+        usageBody,
+        {
+            {"x-ratelimit-limit-requests", "90"},
+            {"x-ratelimit-remaining-requests", "70"},
+            {"x-ratelimit-limit-tokens", "9000"},
+            {"x-ratelimit-remaining-tokens", "8750"},
+            {"x-ratelimit-reset-requests", "25s"},
+        });
+
+    AzureOpenAIProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setDeploymentId(QStringLiteral("my-deployment"));
+    provider.setModel(QStringLiteral("gpt-4o"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 42);
+    QCOMPARE(provider.outputTokens(), 8);
+    QCOMPARE(provider.requestCount(), 1);
+    QCOMPARE(provider.rateLimitRequests(), 90);
+    QCOMPARE(provider.rateLimitRequestsRemaining(), 70);
+    QCOMPARE(provider.rateLimitTokens(), 9000);
+    QCOMPARE(provider.rateLimitTokensRemaining(), 8750);
+    QCOMPARE(provider.rateLimitResetTime(), QStringLiteral("25s"));
+    QVERIFY(provider.cost() > 0.0);
+    QVERIFY(provider.isEstimatedCost());
+    QVERIFY(provider.isConnected());
+
+    QVERIFY(server.hitCount(QStringLiteral("/openai/deployments/my-deployment/chat/completions")) >= 1);
+}
+
+void ProvidersMockedHttpTest::azureProviderMeteredCostPreferred()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray usageBody = R"JSON({
+        "id": "chatcmpl-azure-metered",
+        "object": "chat.completion",
+        "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 30,
+            "total_tokens": 150
+        },
+        "cost": {
+            "total_cost": 0.0125,
+            "daily_cost": 0.05,
+            "monthly_cost": 0.25
+        }
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/openai/deployments/my-deployment/chat/completions"),
+        200,
+        usageBody);
+
+    AzureOpenAIProvider provider;
+    provider.setApiKey(QStringLiteral("test-key"));
+    provider.setDeploymentId(QStringLiteral("my-deployment"));
+    provider.setModel(QStringLiteral("gpt-4o"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.inputTokens(), 120);
+    QCOMPARE(provider.outputTokens(), 30);
+    QCOMPARE(provider.requestCount(), 1);
+    QVERIFY(qAbs(provider.cost() - 0.0125) < 0.000001);
+    QVERIFY(qAbs(provider.dailyCost() - 0.05) < 0.000001);
+    QVERIFY(qAbs(provider.monthlyCost() - 0.25) < 0.000001);
+    QVERIFY(!provider.isEstimatedCost());
+    QVERIFY(provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::azureProviderAuthError()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray authError = R"JSON({"error":"unauthorized"})JSON";
+    server.setResponse(
+        QStringLiteral("POST"),
+        QStringLiteral("/openai/deployments/my-deployment/chat/completions"),
+        401,
+        authError);
+
+    AzureOpenAIProvider provider;
+    provider.setApiKey(QStringLiteral("bad-key"));
+    provider.setDeploymentId(QStringLiteral("my-deployment"));
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy errorSpy(&provider, &ProviderBackend::errorChanged);
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+    QVERIFY(errorSpy.count() >= 1);
+    QVERIFY(provider.errorCount() >= 1);
+    QVERIFY(!provider.errorString().isEmpty());
+    QVERIFY(!provider.isConnected());
+}
+
+void ProvidersMockedHttpTest::azureNormalizeHappyPath()
+{
+    QJsonObject usage;
+    usage.insert(QStringLiteral("prompt_tokens"), 321);
+    usage.insert(QStringLiteral("completion_tokens"), 123);
+    usage.insert(QStringLiteral("total_tokens"), 444);
+
+    QJsonObject cost;
+    cost.insert(QStringLiteral("total_cost"), 1.5);
+    cost.insert(QStringLiteral("daily_cost"), 1.25);
+    cost.insert(QStringLiteral("monthly_cost"), 9.75);
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("usage"), usage);
+    payload.insert(QStringLiteral("cost"), cost);
+
+    const ProviderBackend::NormalizedUsageCost normalized =
+        ProviderBackend::normalizeUsageCost(ProviderBackend::ProviderId::AzureOpenAI, payload);
+
+    QVERIFY(normalized.parsed);
+    QCOMPARE(normalized.inputTokens, 321);
+    QCOMPARE(normalized.outputTokens, 123);
+    QCOMPARE(normalized.requestCount, 1);
+    QCOMPARE(normalized.cost, 1.5);
+    QCOMPARE(normalized.dailyCost, 1.25);
+    QCOMPARE(normalized.monthlyCost, 9.75);
+}
+
+void ProvidersMockedHttpTest::azureNormalizeFailurePath()
+{
+    const QJsonObject payload;
+
+    const ProviderBackend::NormalizedUsageCost normalized =
+        ProviderBackend::normalizeUsageCost(ProviderBackend::ProviderId::AzureOpenAI, payload);
+
+    QVERIFY(!normalized.parsed);
+    QCOMPARE(normalized.inputTokens, 0);
+    QCOMPARE(normalized.outputTokens, 0);
+    QCOMPARE(normalized.requestCount, 0);
+    QCOMPARE(normalized.cost, 0.0);
+    QCOMPARE(normalized.dailyCost, 0.0);
+    QCOMPARE(normalized.monthlyCost, 0.0);
+}
+
+void ProvidersMockedHttpTest::loofiServerSummarySuccess()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray summaryBody = R"JSON({
+        "model": "Qwen3.5-9B",
+        "training_stage": "canary_eval",
+        "gpu_memory_pct": 83.5,
+        "inference_count_24h": 142
+    })JSON";
+
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/api/v2/metrics-summary"),
+        200,
+        summaryBody);
+
+    LoofiServerProvider provider;
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy dataSpy(&provider, &ProviderBackend::dataUpdated);
+    QSignalSpy serverDataSpy(&provider, &LoofiServerProvider::serverDataUpdated);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(dataSpy.count() >= 1, 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(serverDataSpy.count() >= 1, 3000);
+
+    QCOMPARE(provider.activeModel(), QStringLiteral("Qwen3.5-9B"));
+    QCOMPARE(provider.trainingStage(), QStringLiteral("canary_eval"));
+    QCOMPARE(provider.gpuMemoryPct(), 83.5);
+    QCOMPARE(provider.requestCount(), 142);
+    QVERIFY(provider.isConnected());
+
+    QVERIFY(server.hitCount(QStringLiteral("/api/v2/metrics-summary")) >= 1);
+}
+
+void ProvidersMockedHttpTest::loofiServerAuthError()
+{
+    HttpStubServer server;
+    QVERIFY(server.listen());
+
+    const QByteArray authError = R"JSON({"error":"unauthorized"})JSON";
+    server.setResponse(
+        QStringLiteral("GET"),
+        QStringLiteral("/api/v2/metrics-summary"),
+        401,
+        authError);
+
+    LoofiServerProvider provider;
+    provider.setCustomBaseUrl(server.baseUrl());
+
+    QSignalSpy errorSpy(&provider, &ProviderBackend::errorChanged);
+    provider.refresh();
+
+    QTRY_VERIFY_WITH_TIMEOUT(errorSpy.count() >= 1, 3000);
+
+    QVERIFY(provider.errorCount() >= 1);
+    QVERIFY(!provider.errorString().isEmpty());
+    QVERIFY(!provider.isConnected());
 }
 
 QTEST_MAIN(ProvidersMockedHttpTest)

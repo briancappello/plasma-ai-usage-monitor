@@ -5,6 +5,7 @@ set(aiusagemonitor_SRCS
     providerbackend.cpp
     openaicompatibleprovider.cpp
     openaiprovider.cpp
+    azureopenaiprovider.cpp
     anthropicprovider.cpp
     googleprovider.cpp
     mistralprovider.cpp
@@ -22,7 +23,11 @@ set(aiusagemonitor_SRCS
     codexclimonitor.cpp
     copilotmonitor.cpp
     opencodemonitor.cpp
+    cursormonitor.cpp
+    windsurfmonitor.cpp
     browsercookieextractor.cpp
+    loofiserverprovider.cpp
+    ollamaprovider.cpp
 )
 
 set(aiusagemonitor_HDRS
@@ -32,6 +37,7 @@ set(aiusagemonitor_HDRS
     providerbackend.h
     openaicompatibleprovider.h
     openaiprovider.h
+    azureopenaiprovider.h
     anthropicprovider.h
     googleprovider.h
     mistralprovider.h
@@ -50,7 +56,11 @@ set(aiusagemonitor_HDRS
     codexclimonitor.h
     copilotmonitor.h
     opencodemonitor.h
+    cursormonitor.h
+    windsurfmonitor.h
     browsercookieextractor.h
+    loofiserverprovider.h
+    ollamaprovider.h
 )
 
 add_library(aiusagemonitorplugin SHARED ${aiusagemonitor_SRCS} ${aiusagemonitor_HDRS})

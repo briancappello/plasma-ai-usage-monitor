@@ -12,6 +12,7 @@ KCM.SimpleKCM {
     property alias cfg_browserSyncEnabled: browserSyncSwitch.checked
     property alias cfg_browserSyncBrowser: browserSyncBrowserCombo.currentIndex
     property alias cfg_browserSyncInterval: browserSyncIntervalSpin.value
+    property string cfg_browserSyncProfile: plasmoid.configuration.browserSyncProfile || ""
 
     // ── Claude Code ──
     property alias cfg_claudeCodeEnabled: claudeCodeSwitch.checked
@@ -58,11 +59,37 @@ KCM.SimpleKCM {
         var normalized = normalizedSyncCode(code);
         if (normalized === "connected") return i18n("%1 session looks valid in Firefox.", serviceLabel);
         if (normalized === "profile_missing") return i18n("Install Firefox or choose Firefox for Browser Sync.");
-        if (normalized === "cookie_db_missing") return i18n("Close Firefox once, then retry so cookies.sqlite is accessible.");
+        if (normalized === "cookie_db_missing") return i18n("Open Firefox once, sign in to %1, then retry so the cookie database exists.", serviceLabel);
         if (normalized === "cookies_not_found") return i18n("Open %1 in Firefox and sign in at least once.", serviceLabel);
         if (normalized === "session_missing_or_expired") return i18n("Log in to %1 again in Firefox, then retry.", serviceLabel);
         if (normalized === "unsupported_browser") return i18n("Only Firefox is supported currently.");
         return i18n("Check your browser session and retry.");
+    }
+
+    function reloadFirefoxProfiles() {
+        var profiles = syncDetector.firefoxProfiles();
+        var entries = [i18n("Auto (Default Profile)")];
+        for (var i = 0; i < profiles.length; i++) {
+            entries.push(profiles[i]);
+        }
+        firefoxProfileCombo.model = entries;
+
+        if (!cfg_browserSyncProfile || cfg_browserSyncProfile.length === 0) {
+            firefoxProfileCombo.currentIndex = 0;
+            syncDetector.selectedFirefoxProfile = "";
+            return;
+        }
+
+        var idx = entries.indexOf(cfg_browserSyncProfile);
+        if (idx >= 0) {
+            firefoxProfileCombo.currentIndex = idx;
+            syncDetector.selectedFirefoxProfile = cfg_browserSyncProfile;
+        } else {
+            // Persisted profile no longer exists; fall back safely.
+            firefoxProfileCombo.currentIndex = 0;
+            cfg_browserSyncProfile = "";
+            syncDetector.selectedFirefoxProfile = "";
+        }
     }
 
     // ── Temporary monitors for detection ──
@@ -126,6 +153,7 @@ KCM.SimpleKCM {
         if (secrets.walletOpen) {
             loadCopilotToken();
         }
+        reloadFirefoxProfiles();
     }
 
     Component.onDestruction: {
@@ -759,8 +787,54 @@ KCM.SimpleKCM {
                 id: browserSyncBrowserCombo
                 enabled: browserSyncSwitch.checked
                 Layout.fillWidth: true
-                model: [i18n("Firefox"), i18n("Chrome (not yet supported)"), i18n("Chromium (not yet supported)")]
-                currentIndex: plasmoid.configuration.browserSyncBrowser
+                model: [i18n("Firefox (supported)")]
+                currentIndex: 0
+                Component.onCompleted: {
+                    if (plasmoid.configuration.browserSyncBrowser !== 0) {
+                        cfg_browserSyncBrowser = 0;
+                    }
+                }
+            }
+        }
+
+        QQC2.Label {
+            visible: browserSyncSwitch.checked
+            Layout.fillWidth: true
+            text: i18n("Browser Sync currently supports Firefox only. Chrome/Chromium are not available in this release.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            opacity: 0.65
+            wrapMode: Text.WordWrap
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: browserSyncSwitch.checked && browserSyncBrowserCombo.currentIndex === 0
+            enabled: browserSyncSwitch.checked && browserSyncBrowserCombo.currentIndex === 0
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Firefox profile:")
+                Layout.preferredWidth: subscriptionsPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: firefoxProfileCombo
+                Layout.fillWidth: true
+                model: [i18n("Auto (Default Profile)")]
+                onActivated: {
+                    if (currentIndex <= 0) {
+                        cfg_browserSyncProfile = "";
+                        syncDetector.selectedFirefoxProfile = "";
+                    } else {
+                        cfg_browserSyncProfile = currentText;
+                        syncDetector.selectedFirefoxProfile = currentText;
+                    }
+                }
+            }
+            QQC2.ToolButton {
+                icon.name: "view-refresh"
+                display: QQC2.AbstractButton.IconOnly
+                QQC2.ToolTip.text: i18n("Reload Firefox profiles")
+                QQC2.ToolTip.visible: hovered
+                onClicked: reloadFirefoxProfiles()
             }
         }
 
@@ -874,5 +948,6 @@ KCM.SimpleKCM {
     // ── BrowserCookieExtractor for config page ──
     BrowserCookieExtractor {
         id: syncDetector
+        selectedFirefoxProfile: subscriptionsPage.cfg_browserSyncProfile
     }
 }

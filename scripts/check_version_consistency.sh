@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 cmake_version="$(sed -n 's/^project(plasma-ai-usage-monitor VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt | head -1)"
 metadata_version="$(sed -n 's/.*"Version": "\([0-9.]*\)".*/\1/p' package/metadata.json | head -1)"
 spec_version="$(sed -n 's/^Version:[[:space:]]*\([0-9.]*\).*/\1/p' plasma-ai-usage-monitor.spec | head -1)"
+metainfo_version="$(sed -n 's/.*<release version="\([0-9.]*\)".*/\1/p' com.github.loofi.aiusagemonitor.metainfo.xml | head -1)"
 semver_re='^[0-9]+\.[0-9]+\.[0-9]+$'
 
 if [[ -z "$cmake_version" || -z "$metadata_version" || -z "$spec_version" ]]; then
@@ -22,6 +23,13 @@ if [[ "$cmake_version" != "$metadata_version" || "$cmake_version" != "$spec_vers
   echo "  CMake:    ${cmake_version}"
   echo "  metadata: ${metadata_version}"
   echo "  spec:     ${spec_version}"
+  exit 1
+fi
+
+if [[ -n "$metainfo_version" && "$metainfo_version" != "$cmake_version" ]]; then
+  echo "AppStream metainfo version mismatch"
+  echo "  CMake:    ${cmake_version}"
+  echo "  metainfo: ${metainfo_version}"
   exit 1
 fi
 

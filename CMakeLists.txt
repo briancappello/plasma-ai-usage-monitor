@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(plasma-ai-usage-monitor VERSION 3.1.0)
+project(plasma-ai-usage-monitor VERSION 4.2.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +31,10 @@ plasma_install_package(package com.github.loofi.aiusagemonitor)
 # Install KNotification event definitions
 install(FILES plasma_applet_com.github.loofi.aiusagemonitor.notifyrc
         DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
+
+# Install AppStream metainfo for Discover / AppStream catalogs
+install(FILES com.github.loofi.aiusagemonitor.metainfo.xml
+        DESTINATION ${KDE_INSTALL_METAINFODIR})
 
 # Build the C++ QML plugin
 add_subdirectory(plugin)

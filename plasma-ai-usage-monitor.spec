@@ -1,10 +1,10 @@
 Name:           plasma-ai-usage-monitor
-Version:        3.1.0
+Version:        4.2.0
 Release:        1%{?dist}
 Summary:        KDE Plasma 6 widget to monitor AI API token usage, rate limits, and costs
 License:        GPL-3.0-or-later
-URL:            https://github.com/loofitheboss/plasma-ai-usage-monitor
-Source0:        %{name}-%{version}.tar.gz
+URL:            https://github.com/multidraxter-bit/plasma-ai-usage-monitor
+Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.16
 BuildRequires:  extra-cmake-modules
@@ -15,18 +15,21 @@ BuildRequires:  libplasma-devel
 BuildRequires:  kf6-kwallet-devel
 BuildRequires:  kf6-ki18n-devel
 BuildRequires:  kf6-knotifications-devel
+BuildRequires:  kf6-kcoreaddons-devel
+BuildRequires:  libappstream-glib
+BuildRequires:  qt6-qtbase-private-devel
 
 Requires:       plasma-workspace >= 6.0
 Requires:       kf6-kwallet
 Requires:       kf6-kirigami
 Requires:       kf6-kcmutils
-Requires:       qt6-qtbase-sql
+Requires:       qt6-qtbase
 
 %description
 A native KDE Plasma 6 plasmoid that monitors AI API token usage,
 rate limits, costs, and budgets across multiple providers including
 OpenAI, Anthropic (Claude), Google (Gemini), Mistral AI, DeepSeek,
-Groq, and xAI (Grok).
+Groq, xAI (Grok), OpenRouter, Together AI, and Cohere.
 
 Features:
 - Real-time rate limit monitoring for all providers
@@ -52,12 +55,46 @@ Features:
 %install
 %cmake_install
 
+%check
+%ctest
+appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/com.github.loofi.aiusagemonitor.metainfo.xml
+
 %files
+%license LICENSE
+%doc README.md CHANGELOG.md
 %{_datadir}/plasma/plasmoids/com.github.loofi.aiusagemonitor/
 %{_libdir}/qt6/qml/com/github/loofi/aiusagemonitor/
 %{_datadir}/knotifications6/plasma_applet_com.github.loofi.aiusagemonitor.notifyrc
+%{_datadir}/metainfo/com.github.loofi.aiusagemonitor.metainfo.xml
 
 %changelog
+* Sat Mar 15 2026 Loofi <loofi@github.com> - 3.8.1-1
+- Add guided uninstall flow and stale local install shadow detection
+- Polish release/install UX and provider troubleshooting hints
+- Fix KDE Store plasmoid archive layout to ship metadata.json and contents/ at archive root
+- Add missing KF6 CoreAddons build dependency for RPM builds
+
+* Thu Feb 26 2026 Loofi <loofi@github.com> - 3.7.0-1
+- Add Horizon dashboard overview strip in full view with KPI tiles for providers, connectivity, total cost, and tool monitors
+- Add provider section header with connected/enabled status badge and targeted empty-state guidance
+- Redesign full dashboard live layout grouping for clearer scanability before provider and subscription cards
+- Improve provider/subscription card theme adaptation with state-aware tinted surfaces and borders
+
+* Thu Feb 26 2026 Loofi <loofi@github.com> - 3.4.0-1
+- Add GitHub Copilot activity auto-detection using IDE state/log paths (Code, VSCodium, Code OSS)
+- Add Copilot activity baseline and incremental usage tracking tests
+- Include subscription tool monthly costs in compact/popup total cost summaries
+- Expand onboarding from 3 to 4 steps with subscription tools guidance
+- Restrict Browser Sync browser selection to Firefox and clarify unsupported options
+
+* Sun Feb 22 2026 Loofi <loofi@github.com> - 3.2.0-1
+- Add AppStream metainfo for KDE Discover and AppStream catalogs
+- Add COPR build infrastructure (.copr/Makefile, scripts/build_srpm.sh)
+- Add .plasmoid archive to GitHub Release artifacts
+- Add AppStream validation to release CI and RPM spec
+- Update README with COPR install instructions
+- Extend version consistency check to cover metainfo XML
+
 * Thu Feb 20 2026 Loofi <loofi@github.com> - 3.1.0-1
 - Add OpenRouter provider with 22-model pricing and credits balance endpoint
 - Add Together AI provider with 12-model pricing (Llama, Qwen, DeepSeek, Mixtral, Gemma)

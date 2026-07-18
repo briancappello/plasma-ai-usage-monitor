@@ -11,6 +11,18 @@ ColumnLayout {
     id: costCard
 
     property var providers: []
+    property var subscriptionTools: []
+    readonly property bool narrowCard: costCard.width < Kirigami.Units.gridUnit * 18
+
+    readonly property double subscriptionTotalCost: {
+        var total = 0;
+        for (var i = 0; i < subscriptionTools.length; i++) {
+            var tool = subscriptionTools[i];
+            if (tool.enabled && tool.monitor && tool.monitor.hasSubscriptionCost)
+                total += tool.monitor.subscriptionCost;
+        }
+        return total;
+    }
 
     readonly property double totalCost: {
         var total = 0;
@@ -18,7 +30,7 @@ ColumnLayout {
             if (providers[i].enabled && providers[i].backend && providers[i].backend.connected)
                 total += providers[i].backend.cost;
         }
-        return total;
+        return total + subscriptionTotalCost;
     }
 
     readonly property double totalDailyCost: {
@@ -35,6 +47,24 @@ ColumnLayout {
         for (var i = 0; i < providers.length; i++) {
             if (providers[i].enabled && providers[i].backend && providers[i].backend.connected)
                 total += providers[i].backend.monthlyCost;
+        }
+        return total;
+    }
+
+    readonly property double totalDailyBudget: {
+        var total = 0;
+        for (var i = 0; i < providers.length; i++) {
+            if (providers[i].enabled && providers[i].backend)
+                total += providers[i].backend.dailyBudget;
+        }
+        return total;
+    }
+
+    readonly property double totalMonthlyBudget: {
+        var total = 0;
+        for (var i = 0; i < providers.length; i++) {
+            if (providers[i].enabled && providers[i].backend)
+                total += providers[i].backend.monthlyBudget;
         }
         return total;
     }
@@ -63,40 +93,46 @@ ColumnLayout {
             }
             spacing: Kirigami.Units.smallSpacing
 
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
 
-                PlasmaExtras.Heading {
-                    level: 4
-                    text: costCard.costViewMode === 0 ? i18n("Total Cost")
-                        : costCard.costViewMode === 1 ? i18n("Today's Cost")
-                        : i18n("Monthly Cost")
-                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
 
-                Item { Layout.fillWidth: true }
+                    PlasmaExtras.Heading {
+                        level: 4
+                        text: costCard.costViewMode === 0 ? i18n("Total Cost")
+                            : costCard.costViewMode === 1 ? i18n("Today's Cost")
+                            : i18n("Monthly Cost")
+                        Layout.fillWidth: true
+                    }
 
-                // View mode toggle buttons
-                Row {
-                    spacing: 2
+                    // View mode toggle buttons
+                    Row {
+                        spacing: 2
 
-                    Repeater {
-                        model: [
-                            { label: i18n("All"), mode: 0 },
-                            { label: i18n("Day"), mode: 1 },
-                            { label: i18n("Month"), mode: 2 }
-                        ]
+                        Repeater {
+                            model: [
+                                { label: i18n("All"), mode: 0 },
+                                { label: i18n("Day"), mode: 1 },
+                                { label: i18n("Month"), mode: 2 }
+                            ]
 
-                        PlasmaComponents.ToolButton {
-                            text: modelData.label
-                            checked: costCard.costViewMode === modelData.mode
-                            onClicked: costCard.costViewMode = modelData.mode
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            implicitHeight: Kirigami.Units.gridUnit * 1.2
+                            PlasmaComponents.ToolButton {
+                                text: modelData.label
+                                checked: costCard.costViewMode === modelData.mode
+                                onClicked: costCard.costViewMode = modelData.mode
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                implicitHeight: Kirigami.Units.gridUnit * 1.2
+                            }
                         }
                     }
                 }
 
                 PlasmaComponents.Label {
+                    Layout.fillWidth: true
                     text: {
                         var val = costCard.costViewMode === 0 ? costCard.totalCost
                                 : costCard.costViewMode === 1 ? costCard.totalDailyCost
@@ -105,6 +141,7 @@ ColumnLayout {
                     }
                     font.bold: true
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.3
+                    horizontalAlignment: costCard.narrowCard ? Text.AlignLeft : Text.AlignRight
                     color: {
                         var cost = costCard.costViewMode === 0 ? costCard.totalCost
                                  : costCard.costViewMode === 1 ? costCard.totalDailyCost
@@ -112,6 +149,65 @@ ColumnLayout {
                         if (cost > 50) return Kirigami.Theme.negativeTextColor;
                         if (cost > 20) return Kirigami.Theme.neutralTextColor;
                         return Kirigami.Theme.textColor;
+                    }
+                }
+
+                PlasmaComponents.Label {
+                    Layout.fillWidth: true
+                    visible: costCard.costViewMode === 2 && root.totalMonthlyProjection > 0
+                    text: i18n("Projected: $%1", root.totalMonthlyProjection.toFixed(2))
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    opacity: 0.6
+                    horizontalAlignment: costCard.narrowCard ? Text.AlignLeft : Text.AlignRight
+                }
+
+                // NEW: Budget Health Progress Bar
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    visible: {
+                        var budget = costCard.costViewMode === 1 ? costCard.totalDailyBudget : costCard.totalMonthlyBudget;
+                        return budget > 0 && costCard.costViewMode !== 0; // Only show for Day/Month
+                    }
+
+                    Rectangle {
+                        id: budgetBarBg
+                        Layout.fillWidth: true
+                        height: 6
+                        radius: 3
+                        color: Qt.alpha(Kirigami.Theme.textColor, 0.1)
+
+                        Rectangle {
+                            id: budgetBarFill
+                            height: parent.height
+                            radius: parent.radius
+                            width: {
+                                var cost = costCard.costViewMode === 1 ? costCard.totalDailyCost : costCard.totalMonthlyCost;
+                                var budget = costCard.costViewMode === 1 ? costCard.totalDailyBudget : costCard.totalMonthlyBudget;
+                                if (budget <= 0) return 0;
+                                return Math.min(parent.width, (cost / budget) * parent.width);
+                            }
+                            color: {
+                                var cost = costCard.costViewMode === 1 ? costCard.totalDailyCost : costCard.totalMonthlyCost;
+                                var budget = costCard.costViewMode === 1 ? costCard.totalDailyBudget : costCard.totalMonthlyBudget;
+                                var percent = (cost / budget) * 100;
+                                if (percent >= 95) return Kirigami.Theme.negativeTextColor;
+                                if (percent >= 80) return Kirigami.Theme.neutralTextColor;
+                                return Kirigami.Theme.positiveTextColor;
+                            }
+                            Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+                        }
+                    }
+
+                    PlasmaComponents.Label {
+                        Layout.fillWidth: true
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        opacity: 0.6
+                        horizontalAlignment: Text.AlignRight
+                        text: {
+                            var budget = costCard.costViewMode === 1 ? costCard.totalDailyBudget : costCard.totalMonthlyBudget;
+                            return i18n("Budget: $%1", budget.toFixed(2));
+                        }
                     }
                 }
             }
@@ -141,6 +237,8 @@ ColumnLayout {
                     PlasmaComponents.Label {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
+                        maximumLineCount: costCard.narrowCard ? 2 : 1
+                        wrapMode: costCard.narrowCard ? Text.WordWrap : Text.NoWrap
                         text: modelData.name
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         opacity: 0.7
@@ -150,6 +248,44 @@ ColumnLayout {
 
                     PlasmaComponents.Label {
                         text: "$" + parent.providerCost.toFixed(parent.providerCost < 1 ? 4 : 2)
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    }
+                }
+            }
+
+            Repeater {
+                model: costCard.subscriptionTools
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    readonly property double toolCost: {
+                        if (!modelData.monitor || !modelData.monitor.hasSubscriptionCost) return 0;
+                        return modelData.monitor.subscriptionCost ?? 0;
+                    }
+                    visible: costCard.costViewMode === 0 && modelData.enabled && toolCost > 0
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: modelData.monitor?.toolColor ?? Kirigami.Theme.highlightColor
+                    }
+
+                    PlasmaComponents.Label {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        maximumLineCount: costCard.narrowCard ? 2 : 1
+                        wrapMode: costCard.narrowCard ? Text.WordWrap : Text.NoWrap
+                        text: i18n("%1 (subscription)", modelData.name)
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        opacity: 0.7
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    PlasmaComponents.Label {
+                        text: "$" + parent.toolCost.toFixed(parent.toolCost < 1 ? 4 : 2)
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                     }
                 }

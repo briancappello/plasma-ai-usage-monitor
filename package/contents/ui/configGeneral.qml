@@ -20,6 +20,7 @@ KCM.SimpleKCM {
     property alias cfg_groqRefreshInterval: groqRefreshSlider.value
     property alias cfg_xaiRefreshInterval: xaiRefreshSlider.value
     property alias cfg_googleveoRefreshInterval: googleveoRefreshSlider.value
+    property alias cfg_loofiRefreshInterval: loofiRefreshSlider.value
 
     readonly property int labelWidth: Kirigami.Units.gridUnit * 12
 
@@ -73,7 +74,7 @@ KCM.SimpleKCM {
             QQC2.ComboBox {
                 id: compactModeCombo
                 Layout.fillWidth: true
-                model: [i18n("Icon only"), i18n("Total cost"), i18n("Active providers count"), i18n("Subscription chart")]
+                model: [i18n("Icon only"), i18n("Total cost"), i18n("Active providers count"), i18n("Subscription chart"), i18n("Loofi server KPIs")]
                 QQC2.ToolTip.text: i18n("Choose what to display next to the icon in the system panel")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
@@ -82,6 +83,7 @@ KCM.SimpleKCM {
                         case "cost": return 1;
                         case "count": return 2;
                         case "chart": return 3;
+                        case "loofi": return 4;
                         default: return 0;
                     }
                 }
@@ -90,6 +92,7 @@ KCM.SimpleKCM {
                         case 1: generalPage.cfg_compactDisplayMode = "cost"; break;
                         case 2: generalPage.cfg_compactDisplayMode = "count"; break;
                         case 3: generalPage.cfg_compactDisplayMode = "chart"; break;
+                        case 4: generalPage.cfg_compactDisplayMode = "loofi"; break;
                         default: generalPage.cfg_compactDisplayMode = "icon"; break;
                     }
                 }
@@ -110,6 +113,7 @@ KCM.SimpleKCM {
                 Layout.fillWidth: true
                 model: [i18n("Claude Code"), i18n("OpenCode"), i18n("Codex CLI"), i18n("GitHub Copilot")]
                 currentIndex: plasmoid.configuration.chartToolIndex
+                onCurrentIndexChanged: plasmoid.configuration.chartToolIndex = currentIndex
                 QQC2.ToolTip.text: i18n("Which subscription tool to display in the panel chart")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
@@ -240,9 +244,35 @@ KCM.SimpleKCM {
             }
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Loofi Server:"); Layout.preferredWidth: generalPage.labelWidth }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                QQC2.Slider { id: loofiRefreshSlider; Layout.fillWidth: true; from: 0; to: 1800; stepSize: 60; value: plasmoid.configuration.loofiRefreshInterval }
+                QQC2.Label { text: loofiRefreshSlider.value === 0 ? i18n("Use default") : formatInterval(loofiRefreshSlider.value); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.7 }
+            }
+        }
+
         // ── About ──
         Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
         QQC2.Label { text: i18n("About"); font.bold: true }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Icon:"); Layout.preferredWidth: generalPage.labelWidth }
+            Kirigami.Icon {
+                source: Qt.resolvedUrl("../icons/logo.png")
+                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+            }
+            QQC2.Label {
+                text: i18n("AI Usage Monitor")
+                opacity: 0.8
+            }
+        }
 
         RowLayout {
             Layout.fillWidth: true

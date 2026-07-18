@@ -180,20 +180,18 @@ QStringList ClaudeCodeMonitor::availablePlans() const
 
 int ClaudeCodeMonitor::defaultLimitForPlan(const QString &plan) const
 {
-    // 5-hour session limits (approximate, vary by message complexity)
-    if (plan == QStringLiteral("Pro")) return 45;
-    if (plan == QStringLiteral("Max 5x")) return 225;
-    if (plan == QStringLiteral("Max 20x")) return 900;
-    return 45;
+    // Claude's usage API is percentage-based (no message counts), so the
+    // "limit" is a 0–100 percent scale for every plan; the backend already
+    // normalises utilization to the user's actual plan.
+    Q_UNUSED(plan);
+    return 100;
 }
 
 int ClaudeCodeMonitor::defaultSecondaryLimitForPlan(const QString &plan) const
 {
-    // Weekly limits
-    if (plan == QStringLiteral("Pro")) return 225;
-    if (plan == QStringLiteral("Max 5x")) return 1125;
-    if (plan == QStringLiteral("Max 20x")) return 4500;
-    return 225;
+    // Weekly usage is likewise reported as a 0–100 percent scale.
+    Q_UNUSED(plan);
+    return 100;
 }
 
 double ClaudeCodeMonitor::subscriptionCost() const
@@ -420,21 +418,40 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
             return;
         }
 
+        // Claude's usage API is percentage-based: session/weekly are reported
+        // as 0–100 utilization, and there are no message counts. We normalise
+        // the count-based UI to that percent scale (limit == 100, count == %).
+        //
+        // The `limits` array is the authoritative source that drives claude.ai's
+        // own UI (kinds: session / weekly_all / weekly_scoped). Prefer it, and
+        // fall back to the flat five_hour / seven_day objects.
+        double sessionPct = -1.0;
+        double weeklyPct = -1.0;
+        const QJsonArray limits = root.value(QStringLiteral("limits")).toArray();
+        for (const QJsonValue &v : limits) {
+            const QJsonObject l = v.toObject();
+            const QString kind = l.value(QStringLiteral("kind")).toString();
+            const double pct = l.value(QStringLiteral("percent")).toDouble(0.0);
+            if (kind == QStringLiteral("session")) {
+                sessionPct = pct;
+            } else if (kind == QStringLiteral("weekly_all")) {
+                // The overall weekly bucket, matching the "All models" row.
+                weeklyPct = pct;
+            }
+        }
+
         // Parse 5-hour session usage
         QJsonObject fiveHour = root.value(QStringLiteral("five_hour")).toObject();
-        if (!fiveHour.isEmpty()) {
-            double utilization = fiveHour.value(QStringLiteral("utilization")).toDouble(0.0);
-            setSessionPercentUsed(utilization);
+        if (sessionPct < 0.0 && !fiveHour.isEmpty()) {
+            sessionPct = fiveHour.value(QStringLiteral("utilization")).toDouble(0.0);
+        }
+        if (sessionPct >= 0.0) {
+            setSessionPercentUsed(sessionPct);
             setHasSessionInfo(true);
+            // Count bars run on a 0–100 percent scale (see defaultLimitForPlan).
+            setUsageCount(static_cast<int>(qRound(sessionPct)));
 
-            // Convert percentage to count based on configured limit
-            int limit = usageLimit();
-            if (limit > 0) {
-                int used = static_cast<int>((utilization / 100.0) * limit);
-                setUsageCount(used);
-            }
-
-            // Update period reset time
+            // Update period reset time from whichever source has it.
             QString resetsAt = fiveHour.value(QStringLiteral("resets_at")).toString();
             if (!resetsAt.isEmpty()) {
                 QDateTime resetTime = QDateTime::fromString(resetsAt, Qt::ISODate);
@@ -447,27 +464,27 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
 
         // Parse 7-day (weekly) usage
         QJsonObject sevenDay = root.value(QStringLiteral("seven_day")).toObject();
-        if (!sevenDay.isEmpty()) {
-            double utilization = sevenDay.value(QStringLiteral("utilization")).toDouble(0.0);
-            int secLimit = secondaryUsageLimit();
-            if (secLimit > 0) {
-                int used = static_cast<int>((utilization / 100.0) * secLimit);
-                setSecondaryUsageCount(used);
-            }
+        if (weeklyPct < 0.0 && !sevenDay.isEmpty()) {
+            weeklyPct = sevenDay.value(QStringLiteral("utilization")).toDouble(0.0);
+        }
+        if (weeklyPct >= 0.0) {
+            setSecondaryUsageCount(static_cast<int>(qRound(weeklyPct)));
         }
 
-        // Parse extra_usage (metered spending)
+        // Parse extra_usage (metered credit spending). Real fields:
+        //   is_enabled, monthly_limit, used_credits (currency units, not cents).
         QJsonValue extraVal = root.value(QStringLiteral("extra_usage"));
         if (!extraVal.isNull() && extraVal.isObject()) {
             QJsonObject extra = extraVal.toObject();
-            setHasExtraUsage(true);
-            double spentCents = extra.value(QStringLiteral("spent_cents")).toDouble(0);
-            setExtraUsageSpent(spentCents / 100.0);
-            double limitCents = extra.value(QStringLiteral("monthly_limit_cents")).toDouble(0);
-            setExtraUsageLimit(limitCents / 100.0);
-            QString resetsAt = extra.value(QStringLiteral("resets_at")).toString();
-            if (!resetsAt.isEmpty()) {
-                setExtraUsageResetDate(QDateTime::fromString(resetsAt, Qt::ISODate));
+            const bool enabled = extra.value(QStringLiteral("is_enabled")).toBool(false);
+            setHasExtraUsage(enabled);
+            if (enabled) {
+                setExtraUsageSpent(extra.value(QStringLiteral("used_credits")).toDouble(0.0));
+                setExtraUsageLimit(extra.value(QStringLiteral("monthly_limit")).toDouble(0.0));
+                QString resetsAt = extra.value(QStringLiteral("resets_at")).toString();
+                if (!resetsAt.isEmpty()) {
+                    setExtraUsageResetDate(QDateTime::fromString(resetsAt, Qt::ISODate));
+                }
             }
         }
 

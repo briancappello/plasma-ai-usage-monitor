@@ -10,14 +10,14 @@ Fedora 43 KDE (or any distro with KDE Plasma 6):
 
 ```bash
 sudo dnf install cmake extra-cmake-modules gcc-c++ \
-    qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtbase-sql \
+    qt6-qtbase qt6-qtbase-devel qt6-qtdeclarative-devel \
     libplasma-devel kf6-kwallet-devel kf6-ki18n-devel kf6-knotifications-devel
 ```
 
 ### Building
 
 ```bash
-git clone https://github.com/loofitheboss/plasma-ai-usage-monitor.git
+git clone https://github.com/multidraxter-bit/plasma-ai-usage-monitor.git
 cd plasma-ai-usage-monitor
 mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug
@@ -32,6 +32,9 @@ sudo cmake --install build
 
 # Or use the install script
 ./install.sh
+
+# Or run guided bootstrap + dependency checks
+./scripts/install_bootstrap.sh --method source --install-missing
 
 # Or upgrade the plasmoid only in your user profile (no sudo)
 ./scripts/install_local_plasmoid.sh
@@ -201,7 +204,7 @@ If the provider has a completely different API:
 
 ## Reporting Issues
 
-Open an issue at [github.com/loofitheboss/plasma-ai-usage-monitor/issues](https://github.com/loofitheboss/plasma-ai-usage-monitor/issues) with:
+Open an issue at [github.com/multidraxter-bit/plasma-ai-usage-monitor/issues](https://github.com/multidraxter-bit/plasma-ai-usage-monitor/issues) with:
 
 - Your Plasma version (`plasmashell --version`)
 - Your distro and version

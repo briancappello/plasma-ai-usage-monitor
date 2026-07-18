@@ -224,7 +224,7 @@ type ToolSnapshotRequest = {
 
 #### Component Hierarchy Documentation
 
-```
+```text
 PlasmoidItem (package/contents/ui/main.qml)
 ├── SecretsManager (KWallet bridge)
 ├── UsageDatabase (history persistence)
@@ -308,6 +308,7 @@ flowchart LR
    - Ensure tests are registered/discovered and pass in local + GitHub Actions workflows.
 
 Dependencies:
+
 - Phases 1-4 can run in parallel for implementation, but all must complete before Phase 5 quality-gate validation.
 - All phases depend on current CMake/Qt test infrastructure remaining unchanged.
 

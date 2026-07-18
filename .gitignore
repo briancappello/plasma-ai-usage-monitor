@@ -1,4 +1,6 @@
 build/
+build-*/
+build_*/
 *.o
 *.so
 *.qmlc
@@ -10,3 +12,13 @@ Makefile
 *_autogen/
 .vscode/
 .idea/
+.venv/
+.venv-*/
+.demo-output/
+__pycache__/
+*.pyc
+
+# Claude Code temp directories
+tmpclaude-*
+.tmp-*.log
+*.plasmoid

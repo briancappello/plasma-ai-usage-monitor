@@ -61,6 +61,17 @@ KCM.SimpleKCM {
     property string cfg_googleveoTier: "paid"
     property alias cfg_googleveoCustomBaseUrl: googleveoBaseUrlField.text
 
+    property alias cfg_azureEnabled: azureSwitch.checked
+    property alias cfg_azureModel: azureModelField.text
+    property alias cfg_azureDeploymentId: azureDeploymentField.text
+    property alias cfg_azureCustomBaseUrl: azureBaseUrlField.text
+
+    property alias cfg_loofiEnabled: loofiSwitch.checked
+    property alias cfg_loofiServerUrl: loofiServerUrlField.text
+
+    property alias cfg_ollamaEnabled: ollamaSwitch.checked
+    property alias cfg_ollamaServerUrl: ollamaServerUrlField.text
+
     property bool openaiKeyDirty: false
     property bool anthropicKeyDirty: false
     property bool googleKeyDirty: false
@@ -72,6 +83,7 @@ KCM.SimpleKCM {
     property bool togetherKeyDirty: false
     property bool cohereKeyDirty: false
     property bool googleveoKeyDirty: false
+    property bool azureKeyDirty: false
 
     readonly property int labelWidth: Kirigami.Units.gridUnit * 10
 
@@ -94,7 +106,8 @@ KCM.SimpleKCM {
             { name: "openrouter",  field: openrouterKeyField,  dirtyProp: "openrouterKeyDirty"  },
             { name: "together",    field: togetherKeyField,    dirtyProp: "togetherKeyDirty"    },
             { name: "cohere",      field: cohereKeyField,      dirtyProp: "cohereKeyDirty"      },
-            { name: "googleveo",   field: googleveoKeyField,   dirtyProp: "googleveoKeyDirty"   }
+            { name: "googleveo",   field: googleveoKeyField,   dirtyProp: "googleveoKeyDirty"   },
+            { name: "azure",       field: azureKeyField,       dirtyProp: "azureKeyDirty"       }
         ];
         for (var i = 0; i < providers.length; i++) {
             var p = providers[i];
@@ -115,7 +128,8 @@ KCM.SimpleKCM {
             { name: "openrouter",  field: openrouterKeyField,  dirty: openrouterKeyDirty  },
             { name: "together",    field: togetherKeyField,    dirty: togetherKeyDirty    },
             { name: "cohere",      field: cohereKeyField,      dirty: cohereKeyDirty      },
-            { name: "googleveo",   field: googleveoKeyField,   dirty: googleveoKeyDirty   }
+            { name: "googleveo",   field: googleveoKeyField,   dirty: googleveoKeyDirty   },
+            { name: "azure",       field: azureKeyField,       dirty: azureKeyDirty       }
         ];
         for (var i = 0; i < providers.length; i++) {
             var p = providers[i];
@@ -466,6 +480,57 @@ KCM.SimpleKCM {
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: googleveoBaseUrlField; Layout.fillWidth: true; enabled: googleveoSwitch.checked; text: plasmoid.configuration.googleveoCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(googleveoBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
         QQC2.Label { visible: googleveoBaseUrlField.text.toLowerCase().startsWith("http://"); Layout.fillWidth: true; text: i18n("⚠ Using HTTP is insecure. API keys will be sent unencrypted."); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
+
+        // ══════════════════════════════════════════════
+        // ── Azure OpenAI ──
+        // ══════════════════════════════════════════════
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("Azure OpenAI"); font.bold: true }
+
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Enable:"); Layout.preferredWidth: providersPage.labelWidth } QQC2.Switch { id: azureSwitch; checked: plasmoid.configuration.azureEnabled } }
+        RowLayout {
+            Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("API Key:"); Layout.preferredWidth: providersPage.labelWidth }
+            RowLayout {
+                Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
+                QQC2.TextField { id: azureKeyField; Layout.fillWidth: true; enabled: azureSwitch.checked; echoMode: azureKeyVisible.checked ? TextInput.Normal : TextInput.Password; placeholderText: i18n("Enter Azure OpenAI API key..."); onTextEdited: providersPage.azureKeyDirty = true }
+                QQC2.ToolButton { id: azureKeyVisible; checkable: true; checked: false; icon.name: checked ? "password-show-off" : "password-show-on"; display: QQC2.AbstractButton.IconOnly; QQC2.ToolTip.text: checked ? i18n("Hide key") : i18n("Show key"); QQC2.ToolTip.visible: hovered }
+                QQC2.ToolButton { icon.name: "edit-clear"; enabled: azureKeyField.text.length > 0; display: QQC2.AbstractButton.IconOnly; QQC2.ToolTip.text: i18n("Clear key"); QQC2.ToolTip.visible: hovered; onClicked: { azureKeyField.text = ""; providersPage.azureKeyDirty = true; } }
+            }
+        }
+        QQC2.Label { visible: azureSwitch.checked; Layout.fillWidth: true; text: i18n("Use your Azure OpenAI resource endpoint and deployment for monitoring"); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.6; wrapMode: Text.WordWrap }
+        RowLayout {
+            Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
+            QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
+            QQC2.ComboBox { id: azureModelField; Layout.fillWidth: true; enabled: azureSwitch.checked; editable: true; editText: plasmoid.configuration.azureModel; model: ["gpt-4o","gpt-4o-mini","gpt-4","gpt-4-turbo","gpt-35-turbo"]; onEditTextChanged: plasmoid.configuration.azureModel = editText; property alias text: azureModelField.editText }
+        }
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Deployment ID:"); Layout.preferredWidth: providersPage.labelWidth } QQC2.TextField { id: azureDeploymentField; Layout.fillWidth: true; enabled: azureSwitch.checked; text: plasmoid.configuration.azureDeploymentId; placeholderText: i18n("Your deployment name") } }
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Endpoint base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: azureBaseUrlField; Layout.fillWidth: true; enabled: azureSwitch.checked; text: plasmoid.configuration.azureCustomBaseUrl; placeholderText: i18n("https://<resource>.openai.azure.com"); QQC2.ToolTip.text: i18n("Azure endpoint base URL. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
+        QQC2.Label { visible: providersPage.isInvalidUrl(azureBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
+        QQC2.Label { visible: azureBaseUrlField.text.toLowerCase().startsWith("http://"); Layout.fillWidth: true; text: i18n("⚠ Using HTTP is insecure. API keys will be sent unencrypted."); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
+
+        // ══════════════════════════════════════════════
+        // ── Loofi Server ──
+        // ══════════════════════════════════════════════
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("Loofi Server"); font.bold: true }
+
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Enable:"); Layout.preferredWidth: providersPage.labelWidth } QQC2.Switch { id: loofiSwitch; checked: plasmoid.configuration.loofiEnabled } }
+        QQC2.Label { visible: loofiSwitch.checked; Layout.fillWidth: true; text: i18n("Connects to your self-hosted Loofi server and shows the active model, training stage, GPU usage, and 24-hour request volume."); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.6; wrapMode: Text.WordWrap }
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Server URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: loofiServerUrlField; Layout.fillWidth: true; enabled: loofiSwitch.checked; text: plasmoid.configuration.loofiServerUrl; placeholderText: i18n("https://your-loofi-server"); QQC2.ToolTip.text: i18n("Base URL for the Loofi server. The widget will poll /api/v2/metrics-summary."); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
+        QQC2.Label { visible: providersPage.isInvalidUrl(loofiServerUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
+        QQC2.Label { visible: loofiServerUrlField.text.toLowerCase().startsWith("http://"); Layout.fillWidth: true; text: i18n("⚠ Using HTTP is insecure. Prefer https:// for remote servers."); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
+
+        // ══════════════════════════════════════════════
+        // ── Ollama ──
+        // ══════════════════════════════════════════════
+        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
+        QQC2.Label { text: i18n("Ollama"); font.bold: true }
+
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Enable:"); Layout.preferredWidth: providersPage.labelWidth } QQC2.Switch { id: ollamaSwitch; checked: plasmoid.configuration.ollamaEnabled } }
+        QQC2.Label { visible: ollamaSwitch.checked; Layout.fillWidth: true; text: i18n("Monitors a local or remote Ollama server. No API key required."); font.pointSize: Kirigami.Theme.smallFont.pointSize; opacity: 0.6; wrapMode: Text.WordWrap }
+        RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Server URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: ollamaServerUrlField; Layout.fillWidth: true; enabled: ollamaSwitch.checked; text: plasmoid.configuration.ollamaServerUrl; placeholderText: i18n("http://localhost:11434"); QQC2.ToolTip.text: i18n("Base URL for the Ollama server."); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
+        QQC2.Label { visible: providersPage.isInvalidUrl(ollamaServerUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
 
         Item { Layout.fillHeight: true }
     }

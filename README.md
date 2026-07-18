@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#features">Features</a> •
+  <a href="https://github.com/multidraxter-bit/plasma-ai-usage-monitor/releases">Releases</a> •
   <a href="#installation">Installation</a> •
   <a href="#configuration">Configuration</a> •
   <a href="#api-key-requirements">API Keys</a> •
@@ -21,14 +22,25 @@
 
 A native KDE Plasma 6 plasmoid that monitors AI API token usage, rate limits, and costs across multiple providers. Sits in your panel as a compact icon with a colored status badge and expands into a detailed popup with per-provider stats, usage history charts, and budget tracking. Also tracks subscription-based AI coding tool usage limits for Claude Code, Codex CLI, and GitHub Copilot.
 
-**Supported providers:** OpenAI, Anthropic (Claude), Google Gemini, Mistral AI, DeepSeek, Groq, xAI (Grok)
+> **Current stabilization focus:** `v3.9.0 "Showcase"` is dedicated to reliability hardening, a reproducible Fedora KDE demo environment, and refreshed GitHub/KDE Store media assets.
+
+## Quick Links
+
+- **Latest release:** [GitHub Releases](https://github.com/multidraxter-bit/plasma-ai-usage-monitor/releases)
+- **Demo environment guide:** [docs/demo/fedora-kde-vm.md](docs/demo/fedora-kde-vm.md)
+- **Manual store handoff:** [docs/store/submission-checklist.md](docs/store/submission-checklist.md)
+- **Screenshot playbook:** [assets/screenshots/README.md](assets/screenshots/README.md)
+
+> **Demo Mode:** Contributors can run the widget in a deterministic offline mode for testing and screenshots. Start `python scripts/demo/mock_server.py`, then run Plasma with `PLASMA_AI_MONITOR_DEMO=1 plasmashell --replace &`.
+
+**Supported providers:** Loofi Server, OpenAI, Azure OpenAI, Anthropic (Claude), Google Gemini, Mistral AI, DeepSeek, Groq, xAI (Grok), OpenRouter, Together AI, Cohere, Google Veo
 
 **Supported subscription tools:** Claude Code, OpenAI Codex CLI, GitHub Copilot
 
 ## Features
 
 - **Real-time monitoring** — Periodic background polling with configurable per-provider refresh intervals (default 5 min) and manual refresh
-- **7 AI providers** — OpenAI, Anthropic, Google Gemini, Mistral AI, DeepSeek, Groq, xAI/Grok
+- **13 AI providers** — Loofi Server, OpenAI, Azure OpenAI, Anthropic, Google Gemini, Mistral AI, DeepSeek, Groq, xAI/Grok, OpenRouter, Together AI, Cohere, Google Veo
 - **Token usage tracking** — Input/output tokens used, requests made, quota/tier limits
 - **Cost tracking** — Dollar spending with daily and monthly cost breakdowns; automatic token-based cost estimation for providers without billing APIs (~30 models with pricing tables)
 - **Budget management** — Per-provider daily/monthly budgets with configurable warning thresholds and notifications when budgets are exceeded
@@ -52,16 +64,19 @@ A native KDE Plasma 6 plasmoid that monitors AI API token usage, rate limits, an
 In addition to API providers, the widget tracks usage limits for subscription-based AI coding tools:
 
 ### Claude Code
+
 - Monitors `~/.claude/` directory for activity via filesystem watcher
 - Plans: **Pro** (45/5h, 225/week), **Max 5x** (225/5h, 1125/week), **Max 20x** (900/5h, 4500/week)
 - Dual limits: 5-hour session window + weekly rolling window
 
 ### Codex CLI
+
 - Monitors `~/.codex/` directory for activity via filesystem watcher
 - Plans: **Plus** (45/5h), **Pro** (300/5h), **Business** (45/5h)
 - Single 5-hour rolling window
 
 ### GitHub Copilot
+
 - Tracks monthly premium request limits (resets 1st of each month UTC)
 - Plans: **Free** (50/mo), **Pro** (300/mo), **Pro+** (1500/mo), **Business** (300/mo), **Enterprise** (1000/mo)
 - Optional GitHub API integration for organization-level seat metrics (requires PAT with `manage_billing:copilot` scope)
@@ -80,21 +95,23 @@ Optionally sync real-time usage data by reading session cookies from your Firefo
 **Enable:** Settings → Subscriptions → Browser Sync → Enable sync
 
 **Requirements:** Firefox with an active session on claude.ai and/or chatgpt.com. Chrome/Chromium is not currently supported (encrypted cookies).
+If you have multiple Firefox profiles, you can choose a specific profile in
+Settings → Subscriptions → Browser Sync.
 
 > **Warning:** This feature uses internal, undocumented APIs. It may stop working if services change their API structure. Use at your own risk.
 
 ## What Each Provider Reports
 
-| Metric | OpenAI | Anthropic | Google | Mistral | DeepSeek | Groq | xAI |
-|--------|--------|-----------|--------|---------|----------|------|-----|
-| Token usage (in/out) | Yes | No | No | Yes | Yes | Yes | Yes |
-| Rate limits remaining | Yes | Yes | No* | Yes | Yes | Yes | Yes |
-| Cost / spending | Yes (billing) | Est.** | Est.** | Est.** | Est.** | Est.** | Est.** |
-| Request count | Yes | Yes | No | Yes | Yes | Yes | Yes |
-| Connection status | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Metric                | OpenAI        | Anthropic | Google   | Mistral  | DeepSeek | Groq     | xAI      |
+| --------------------- | ------------- | --------- | -------- | -------- | -------- | -------- | -------- |
+| Token usage (in/out)  | Yes           | No        | No       | Yes      | Yes      | Yes      | Yes      |
+| Rate limits remaining | Yes           | Yes       | No\*     | Yes      | Yes      | Yes      | Yes      |
+| Cost / spending       | Yes (billing) | Est.\*\*  | Est.\*\* | Est.\*\* | Est.\*\* | Est.\*\* | Est.\*\* |
+| Request count         | Yes           | Yes       | No       | Yes      | Yes      | Yes      | Yes      |
+| Connection status     | Yes           | Yes       | Yes      | Yes      | Yes      | Yes      | Yes      |
 
-*\* Google Gemini displays known free-tier limits from documentation (static).*
-*\*\* Estimated from token usage and per-model pricing tables. Labeled "Est. Cost" in the UI with a tooltip.*
+_\* Google Gemini displays known free-tier limits from documentation (static)._
+_\*\* Estimated from token usage and per-model pricing tables. Labeled "Est. Cost" in the UI with a tooltip._
 
 - **OpenAI** has the richest data: real usage from `/organization/usage/completions`, dollar costs from `/organization/costs` and `/organization/costs` (monthly), and rate limits from response headers. Requires an **Admin API key**.
 - **Anthropic** has no usage/billing API. The widget pings `/v1/messages/count_tokens` (lightweight, no token cost) and reads the `anthropic-ratelimit-*` response headers for rate limit data. Cost is estimated from registered model pricing.
@@ -104,11 +121,19 @@ Optionally sync real-time usage data by reading session cookies from your Firefo
 
 ## Screenshots
 
-*Screenshots coming soon — the widget is functional and can be added to any Plasma 6 panel or desktop.*
+Current canonical asset names live under `assets/screenshots/` and are intentionally stable so README, AppStream, and KDE Store references do not need to change when the images are refreshed.
 
-<p align="center">
-  <img src="assets/logo.png" alt="Plasma AI Monitor Logo" width="128" />
-</p>
+### Main window
+
+![Plasma AI Usage Monitor main window](assets/screenshots/main-window.png)
+
+### Panel/compact view
+
+![Plasma AI Usage Monitor panel view](assets/screenshots/panel-view.png)
+
+### Settings-oriented view
+
+![Plasma AI Usage Monitor settings-oriented view](assets/screenshots/settings-view.png)
 
 ## Requirements
 
@@ -119,27 +144,138 @@ Optionally sync real-time usage data by reading session cookies from your Firefo
 
 ### Build Dependencies (Fedora)
 
-```
+```text
 cmake
 extra-cmake-modules
 gcc-c++
+qt6-qtbase
 qt6-qtbase-devel
 qt6-qtdeclarative-devel
-qt6-qtbase-sql
 libplasma-devel
 kf6-kwallet-devel
 kf6-ki18n-devel
 kf6-knotifications-devel
+kf6-kcoreaddons-devel
 ```
+
+## Development Workflow
+
+Install [`just`](https://github.com/casey/just) to use the unified `Justfile` recipes:
+
+```bash
+sudo dnf install just   # Fedora
+# or: cargo install just
+```
+
+| Recipe                    | Description                                                    |
+| ------------------------- | -------------------------------------------------------------- |
+| `just build`              | Configure + build (Release)                                    |
+| `just build-debug`        | Configure + build (Debug, enables tests)                       |
+| `just test`               | Build debug + run unit tests via ctest                         |
+| `just check`              | Version consistency + no-hardcoded-versions checks             |
+| `just doctor`             | Validate install/build prerequisites                           |
+| `just doctor-fix`         | Validate and auto-install missing Fedora deps                  |
+| `just versions`           | Show repo / user-local / system installed versions             |
+| `just clean`              | Remove the `build/` directory                                  |
+| **System-wide (sudo)**    |                                                                |
+| `just install`            | Build then `sudo cmake --install build`                        |
+| `just reinstall`          | Uninstall + install                                            |
+| `just uninstall`          | Remove via `build/install_manifest.txt`                        |
+| **User-local (no sudo)**  |                                                                |
+| `just dev`                | Install user-local QML + reload plasmashell (fastest dev loop) |
+| `just install-user`       | `kpackagetool6 --upgrade package/`                             |
+| `just uninstall-user`     | Remove user-local QML package                                  |
+| `just reload`             | Restart plasmashell                                            |
+| **Bootstrap**             |                                                                |
+| `just bootstrap`          | Guided install (auto picks COPR on Fedora)                     |
+| `just bootstrap-source`   | Guided source install with dependency auto-fix                 |
+| `just bootstrap-copr`     | Guided Fedora COPR install                                     |
+| `just bootstrap-user`     | Guided user-local install + reload                             |
+| **COPR / DNF**            |                                                                |
+| `just copr-install`       | Enable COPR + `dnf install`                                    |
+| `just copr-update`        | `dnf upgrade` from COPR                                        |
+| `just copr-remove`        | Remove package + COPR repo                                     |
+| **Version**               |                                                                |
+| `just bump VERSION=3.8.1` | Bump version in all 4 files atomically                         |
+
+**Typical dev loop (QML changes):**
+
+```bash
+# Edit package/contents/ui/*.qml, then:
+just dev
+```
+
+**Typical dev loop (C++ plugin changes):**
+
+```bash
+# Edit plugin/*.cpp, then:
+just install   # sudo required; rebuilds and installs to /usr
+just reload
+```
+
+**Release a new version:**
+
+```bash
+just bump VERSION=3.8.1
+# Update CHANGELOG.md, then:
+git commit -am "chore: bump version to v3.8.1"
+git tag v3.8.1 && git push --tags
+```
+
+---
 
 ## Installation
 
-### Quick Install (Fedora)
+### Guided Bootstrap (Recommended for source installs)
 
-The included `install.sh` script checks dependencies, builds, and installs everything:
+Use the guided bootstrap script to run preflight checks and install with the
+right method:
 
 ```bash
-git clone https://github.com/loofitheboss/plasma-ai-usage-monitor.git
+git clone https://github.com/multidraxter-bit/plasma-ai-usage-monitor.git
+cd plasma-ai-usage-monitor
+./scripts/install_bootstrap.sh
+```
+
+Useful modes:
+
+```bash
+# Force source build/install
+./scripts/install_bootstrap.sh --method source --install-missing
+
+# Force user-local plasmoid-only install (no system plugin install)
+./scripts/install_bootstrap.sh --method user
+```
+
+Run only dependency checks:
+
+```bash
+./scripts/install_doctor.sh
+```
+
+### Install from COPR (Recommended)
+
+```bash
+sudo dnf copr enable loofitheboss/plasma-ai-usage-monitor
+sudo dnf install plasma-ai-usage-monitor
+```
+
+This installs both the QML plasmoid package and the C++ plugin. After installation, log out and back in (or run `plasmashell --replace &`), then add the widget from "Add Widgets...".
+
+To uninstall:
+
+```bash
+sudo dnf remove plasma-ai-usage-monitor
+sudo dnf copr remove loofitheboss/plasma-ai-usage-monitor
+```
+
+### Quick Install (Fedora)
+
+The included `install.sh` script now delegates to the guided bootstrap flow
+in source mode with Fedora dependency auto-fix enabled:
+
+```bash
+git clone https://github.com/multidraxter-bit/plasma-ai-usage-monitor.git
 cd plasma-ai-usage-monitor
 chmod +x install.sh
 ./install.sh
@@ -150,8 +286,9 @@ chmod +x install.sh
 ```bash
 # Install build dependencies (Fedora)
 sudo dnf install cmake extra-cmake-modules gcc-c++ \
-    qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtbase-sql \
-    libplasma-devel kf6-kwallet-devel kf6-ki18n-devel kf6-knotifications-devel
+    qt6-qtbase qt6-qtbase-devel qt6-qtdeclarative-devel \
+    libplasma-devel kf6-kwallet-devel kf6-ki18n-devel kf6-knotifications-devel \
+    kf6-kcoreaddons-devel
 
 # Build
 mkdir build && cd build
@@ -171,11 +308,13 @@ sudo cmake --install .
 5. Right-click the widget > **Configure** to add your API keys
 
 To test without adding to a panel:
+
 ```bash
 plasmawindowed com.github.loofi.aiusagemonitor
 ```
 
 If the widget doesn't appear after installation:
+
 ```bash
 plasmashell --replace &
 ```
@@ -218,6 +357,7 @@ Right-click the widget and select **Configure** to access six settings tabs:
 ### Providers
 
 Each provider has:
+
 - **Enable/disable** toggle
 - **API key** field — Keys are stored in KWallet. Use the eye icon to show/hide, and the clear button to remove a key.
 - **Model selector** — Choose which model to query (e.g., `gpt-4o`, `claude-sonnet-4-20250514`, `gemini-2.0-flash`, `mistral-large-latest`, `deepseek-chat`, `llama-3.3-70b-versatile`, `grok-3`)
@@ -243,6 +383,7 @@ Each provider has:
 
 - **Claude Code** — Enable/disable, plan tier (Pro/Max 5x/Max 20x), custom usage limit, notifications
 - **Codex CLI** — Enable/disable, plan tier (Plus/Pro/Business), custom usage limit, notifications
+- **Browser Sync profile** — Select a Firefox profile explicitly or use auto/default detection
 - **GitHub Copilot** — Enable/disable, plan tier (Free/Pro/Pro+/Business/Enterprise), custom limit, notifications
 - **GitHub API (optional)** — Personal access token and organization name for Copilot seat metrics
 - **Auto-detect** — Each tool shows a detection badge (detected/not found) based on installed binaries and config directories
@@ -260,9 +401,9 @@ Each provider has:
 
 ## Architecture
 
-```
+```text
 plasma-ai-usage-monitor/
-├── CMakeLists.txt                  # Root build system (v2.9.0)
+├── CMakeLists.txt                  # Root build system (v3.8.1)
 ├── install.sh                      # Build & install script
 ├── plasma-ai-usage-monitor.spec    # RPM packaging spec
 ├── plasma_applet_...notifyrc       # KDE notification events
@@ -291,7 +432,7 @@ plasma-ai-usage-monitor/
 └── plugin/                         # C++ QML plugin
     ├── CMakeLists.txt
     ├── qmldir                      # QML module registration
-    ├── aiusageplugin.{h,cpp}       # QQmlExtensionPlugin (16 types)
+    ├── aiusageplugin.{h,cpp}       # QQmlExtensionPlugin (20 types)
     ├── appinfo.{h,cpp}             # App version singleton for QML (build-version source of truth)
     ├── secretsmanager.{h,cpp}      # KWallet wrapper
     ├── clipboardhelper.h            # Clipboard copy/paste helper
@@ -304,6 +445,10 @@ plasma-ai-usage-monitor/
     ├── deepseekprovider.{h,cpp}    # DeepSeek (extends OpenAICompatibleProvider)
     ├── groqprovider.{h,cpp}        # Groq (extends OpenAICompatibleProvider)
     ├── xaiprovider.{h,cpp}         # xAI/Grok (extends OpenAICompatibleProvider)
+    ├── openrouterprovider.{h,cpp}  # OpenRouter (extends OpenAICompatibleProvider)
+    ├── togetherprovider.{h,cpp}    # Together AI (extends OpenAICompatibleProvider)
+    ├── cohereprovider.{h,cpp}      # Cohere (extends OpenAICompatibleProvider)
+    ├── googleveoprovider.{h,cpp}   # Google Veo video generation monitor
     ├── subscriptiontoolbackend.{h,cpp}   # Abstract base for subscription tools
     ├── claudecodemonitor.{h,cpp}         # Claude Code usage monitor
     ├── codexclimonitor.{h,cpp}           # Codex CLI usage monitor
@@ -315,7 +460,7 @@ plasma-ai-usage-monitor/
 
 ### C++ Plugin
 
-The QML plugin (`com.github.loofi.aiusagemonitor`) provides 16 types:
+The QML plugin (`com.github.loofi.aiusagemonitor`) provides 20 types:
 
 - **`AppInfo`** — QML singleton exposing the build version (`AppInfo.version`) so update checks and About pages stay in sync with CMake/package metadata.
 - **`SecretsManager`** — Wraps KWallet for secure API key storage. Uses wallet folder `"ai-usage-monitor"` with async open and a pending operations queue.
@@ -328,6 +473,10 @@ The QML plugin (`com.github.loofi.aiusagemonitor`) provides 16 types:
 - **`DeepSeekProvider`** — Extends `OpenAICompatibleProvider`. Also fetches prepaid balance from `/user/balance`. Registers pricing for deepseek-chat and deepseek-reasoner.
 - **`GroqProvider`** — Extends `OpenAICompatibleProvider`. Registers pricing for 5 Groq models.
 - **`XAIProvider`** — Extends `OpenAICompatibleProvider`. Registers pricing for grok-3, grok-3-mini, grok-2.
+- **`OpenRouterProvider`** — Extends `OpenAICompatibleProvider`. Registers pricing for 22 models. Fetches credits balance.
+- **`TogetherProvider`** — Extends `OpenAICompatibleProvider`. Registers pricing for 12 models (Llama, Qwen, DeepSeek, Mixtral, Gemma).
+- **`CohereProvider`** — Extends `OpenAICompatibleProvider`. Registers pricing for 7 Cohere models.
+- **`GoogleVeoProvider`** — Google Veo video generation usage monitor.
 - **`ClipboardHelper`** — Simple helper class for copying text to the system clipboard (replaces the previous TextArea workaround).
 - **`UsageDatabase`** — SQLite persistence with WAL mode, configurable retention, auto-pruning, CSV/JSON export, and aggregated provider/tool series APIs for compare analytics.
 - **`SubscriptionToolBackend`** (abstract) — Base class for subscription-based AI coding tool monitors. Tracks usage counts against fixed limits with rolling time windows (5-hour, daily, weekly, monthly). Supports dual primary/secondary periods, automatic period resets, and 80% limit warnings.
@@ -337,7 +486,7 @@ The QML plugin (`com.github.loofi.aiusagemonitor`) provides 16 types:
 
 ### QML Frontend
 
-- **`main.qml`** — Instantiates 7 C++ API backends + 3 subscription tool monitors, manages per-provider refresh timers, handles KWallet lifecycle, fires KDE notifications with cooldown and DND support, records snapshots to UsageDatabase. Uses `allProviders` and `allSubscriptionTools` arrays to drive tooltips, refresh, and notification routing.
+- **`main.qml`** — Instantiates 10 C++ API backends + 3 subscription tool monitors, manages per-provider refresh timers, handles KWallet lifecycle, fires KDE notifications with cooldown and DND support, records snapshots to UsageDatabase. Uses `allProviders` and `allSubscriptionTools` arrays to drive tooltips, refresh, and notification routing.
 - **`CompactRepresentation.qml`** — Panel icon with 3 display modes (icon with status badge, cost display, provider count), smooth animations, and screen reader accessibility
 - **`FullRepresentation.qml`** — Popup with status summary bar, tabbed Live/History view, data-driven provider cards via Repeater, subscription tool cards section, detail history, compare mode (providers/tools + metrics), responsive history controls, loading/empty states, and export buttons
 - **`MultiSeriesChart.qml`** — Multi-line comparison chart with compact legend chips, hover crosshair, and ranked per-series tooltip values
@@ -374,6 +523,18 @@ A standard API key from [console.groq.com/keys](https://console.groq.com/keys).
 
 A standard API key from [console.x.ai](https://console.x.ai).
 
+### OpenRouter
+
+A standard API key from [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys).
+
+### Together AI
+
+A standard API key from [api.together.ai/settings/api-keys](https://api.together.ai/settings/api-keys).
+
+### Cohere
+
+A standard API key from [dashboard.cohere.com/api-keys](https://dashboard.cohere.com/api-keys).
+
 ## RPM Packaging
 
 An RPM spec file is included for Fedora/RHEL packaging:
@@ -382,9 +543,30 @@ An RPM spec file is included for Fedora/RHEL packaging:
 rpmbuild -ba plasma-ai-usage-monitor.spec
 ```
 
+## Packaging Kickoff (Flatpak + Deterministic Local Artifacts)
+
+- Canonical Flatpak manifest at `packaging/flatpak/com.github.loofi.aiusagemonitor.yaml`
+- Deterministic local packaging scripts:
+  - `scripts/package_source_tarball.sh`
+  - `scripts/package_plasmoid.sh`
+  - `scripts/check_flatpak_scaffold.sh`
+- Packaging validation now checks manifest identity/runtime fields and version consistency with project metadata in CI/release workflows.
+- The `.plasmoid` archive is built from the **contents of `package/`**, so `metadata.json` and `contents/` sit at the archive root as required by Plasma/KDE Store package installs.
+- **Important:** the KDE Store / `.plasmoid` artifact contains only the plasmoid package payload. This project still needs the compiled QML plugin from the distro package or a source install to work fully.
+
+Quick checks:
+
+```bash
+bash scripts/check_version_consistency.sh
+bash scripts/check_flatpak_scaffold.sh
+bash scripts/package_source_tarball.sh --check
+bash scripts/package_plasmoid.sh --check
+```
+
 ## Troubleshooting
 
 **Widget doesn't appear after install:**
+
 ```bash
 plasmashell --replace &
 ```
@@ -403,30 +585,43 @@ Check that the History tab is enabled in configuration. Data is stored in `~/.lo
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [CHANGELOG.md](CHANGELOG.md) | Full version history from v1.0.0 to present |
-| [SECURITY.md](SECURITY.md) | Security policy, vulnerability reporting, and design decisions |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, coding standards, and contribution workflow |
+| Document                                                                 | Description                                                    |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| [CHANGELOG.md](CHANGELOG.md)                                             | Full version history from v1.0.0 to present                    |
+| [SECURITY.md](SECURITY.md)                                               | Security policy, vulnerability reporting, and design decisions |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                                       | Development setup, coding standards, and contribution workflow |
+| [docs/demo/fedora-kde-vm.md](docs/demo/fedora-kde-vm.md)                 | Fedora KDE VM workflow for live testing and screenshot capture |
+| [docs/store/submission-checklist.md](docs/store/submission-checklist.md) | Manual GitHub + KDE Store update checklist                     |
+| [assets/screenshots/README.md](assets/screenshots/README.md)             | Canonical shot list and screenshot quality guide               |
+| [docs/walkthrough.md](docs/walkthrough.md)                               | Current documentation map and historical walkthrough note      |
 
 ## Changelog
 
-### v2.9.0 — Test Coverage Expansion
-- Add 43 new C++ unit tests across 4 test files (ProviderBackend, SubscriptionToolBackend, UpdateChecker, UsageDatabase)
-- Test budget warning/exceeded signals with dedup validation
-- Test token-based cost estimation with exact and prefix model matching
-- Test generation counter for stale request detection
-- Test disconnect/reconnect signal transitions
-- Test subscription limit warnings, period calculations, and auto-reset
-- Test version property setters and interval clamping in UpdateChecker
-- Test database pruning, CSV/JSON export, summary aggregation, retention clamping, and disabled recording
+### v3.4.0 — Subscription Cost + Copilot Detection
 
-### v2.8.2 — Reliability + Test Hardening
+- Add Copilot activity auto-detection from local IDE state/log paths
+- Include subscription tool costs in compact and full total-cost summaries
+- Add Firefox-only Browser Sync guidance and onboarding step improvements
+- Add test coverage for Copilot activity increment detection
 
-- Improve Browser Sync status diagnostics with actionable connection messages
-- Add provider mocked-HTTP unit tests (OpenAI, Anthropic, DeepSeek)
-- Add subscription monitor unit tests (plan defaults, install detection, sync diagnostics)
-- Add blocking `clang-tidy` CI gate with repository runner script
+### v3.2.0 — AppStream & COPR Packaging
+
+- Add AppStream metainfo for KDE Discover and AppStream catalogs
+- Add COPR build infrastructure for Fedora package distribution
+- Add `.plasmoid` archive as GitHub Release artifact
+- Add AppStream validation in CI and RPM spec
+
+### v3.1.0 — New Providers (OpenRouter, Together AI, Cohere)
+
+- Add OpenRouter provider with 22-model pricing and credits balance
+- Add Together AI provider with 12-model pricing
+- Add Cohere provider with 7-model pricing
+- Add unit tests for all 3 new providers
+
+### v3.0.0 — 2026 Pricing Update
+
+- Update model pricing tables for all providers to 2026 pricing
+- Add new models for Anthropic, Google, Mistral, Groq, and xAI
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -436,4 +631,4 @@ GPL-3.0-or-later. See [LICENSE](LICENSE) for the full text.
 
 ## Author
 
-**Loofi** — [github.com/loofitheboss](https://github.com/loofitheboss)
+**Loofi** — [github.com/multidraxter-bit](https://github.com/multidraxter-bit)
