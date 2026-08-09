@@ -451,31 +451,6 @@ PlasmoidItem {
         iconName: root.brandedNotificationIcon
     }
 
-    Notification {
-        id: updateNotification
-        componentName: "plasma_applet_com.github.loofi.aiusagemonitor"
-        eventId: "updateAvailable"
-        title: i18n("AI Usage Monitor - Update Available")
-        iconName: root.brandedNotificationIcon
-    }
-
-    // ── Update Checker ──
-
-    UpdateChecker {
-        id: updateChecker
-        currentVersion: (plasmoid.metaData && plasmoid.metaData.version)
-                        ? plasmoid.metaData.version
-                        : AppInfo.version
-        checkIntervalHours: plasmoid.configuration.updateCheckInterval || 12
-
-        onUpdateAvailable: function(latestVersion, releaseUrl) {
-            if (!plasmoid.configuration.alertsEnabled || !plasmoid.configuration.notifyOnUpdate) return;
-            updateNotification.text = i18n("Version %1 is available! Visit %2 to update.",
-                                           latestVersion, releaseUrl);
-            updateNotification.sendEvent();
-        }
-    }
-
     // ── UI Representations ──
 
     compactRepresentation: CompactRepresentation {}

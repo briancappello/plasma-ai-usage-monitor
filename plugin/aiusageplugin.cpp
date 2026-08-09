@@ -16,7 +16,6 @@
 #include "googleveoprovider.h"
 #include "usagedatabase.h"
 #include "clipboardhelper.h"
-#include "updatechecker.h"
 #include "subscriptiontoolbackend.h"
 #include "claudecodemonitor.h"
 #include "codexclimonitor.h"
@@ -56,7 +55,6 @@ void AiUsagePlugin::registerTypes(const char *uri)
     qmlRegisterType<GoogleVeoProvider>(uri, 1, 0, "GoogleVeoProvider");
     qmlRegisterType<UsageDatabase>(uri, 1, 0, "UsageDatabase");
     qmlRegisterType<ClipboardHelper>(uri, 1, 0, "ClipboardHelper");
-    qmlRegisterType<UpdateChecker>(uri, 1, 0, "UpdateChecker");
 
     // Subscription tool monitors
     qmlRegisterType<ClaudeCodeMonitor>(uri, 1, 0, "ClaudeCodeMonitor");

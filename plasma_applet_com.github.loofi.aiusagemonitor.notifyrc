@@ -33,8 +33,3 @@ Comment=A previously disconnected provider has reconnected
 Flags=Popup
 Action=Popup
 
-[Event/updateAvailable]
-Name=Update Available
-Comment=A newer version of AI Usage Monitor is available
-Flags=Popup
-Action=Popup

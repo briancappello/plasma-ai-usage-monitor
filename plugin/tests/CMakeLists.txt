@@ -36,10 +36,6 @@ set(TEST_SUBTOOL_ONLY_SRC
     ${CMAKE_SOURCE_DIR}/plugin/subscriptiontoolbackend.cpp
 )
 
-set(TEST_UPDATECHECKER_SRC
-    ${CMAKE_SOURCE_DIR}/plugin/updatechecker.cpp
-)
-
 # --- UsageDatabase series test ---
 add_executable(test_usagedatabase_series
     test_usagedatabase_series.cpp
@@ -136,21 +132,6 @@ target_link_libraries(test_subscriptiontoolbackend
 
 add_test(NAME subscriptiontoolbackend COMMAND test_subscriptiontoolbackend)
 
-# --- UpdateChecker unit test ---
-add_executable(test_updatechecker
-    test_updatechecker.cpp
-    ${TEST_UPDATECHECKER_SRC}
-)
-
-target_include_directories(test_updatechecker
-    PRIVATE ${CMAKE_SOURCE_DIR}/plugin
-)
-
-target_link_libraries(test_updatechecker
-    PRIVATE Qt6::Core Qt6::Test Qt6::Network
-)
-
-add_test(NAME updatechecker COMMAND test_updatechecker)
 
 # --- UsageDatabase extended test ---
 add_executable(test_usagedatabase_extended

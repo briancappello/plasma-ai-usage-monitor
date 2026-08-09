@@ -28,8 +28,6 @@ KCM.SimpleKCM {
     property alias cfg_googleveoNotificationsEnabled: googleveoNotifySwitch.checked
     property alias cfg_azureNotificationsEnabled: azureNotifySwitch.checked
     property alias cfg_loofiNotificationsEnabled: loofiNotifySwitch.checked
-    property alias cfg_notifyOnUpdate: updateNotifySwitch.checked
-    property alias cfg_updateCheckInterval: updateCheckSpinBox.value
 
     readonly property int labelWidth: Kirigami.Units.gridUnit * 12
 
@@ -147,33 +145,6 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18n("Loofi Server:")
             enabled: alertsSwitch.checked
             checked: plasmoid.configuration.loofiNotificationsEnabled
-        }
-
-        // ── Update Notifications ──
-        Kirigami.Separator { Layout.fillWidth: true; Layout.topMargin: Kirigami.Units.largeSpacing }
-        QQC2.Label { text: i18n("Update Notifications"); font.bold: true }
-
-        RowLayout {
-            Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
-            QQC2.Label { text: i18n("Notify on new version:"); Layout.preferredWidth: alertsPage.labelWidth; wrapMode: Text.WordWrap }
-            QQC2.Switch { id: updateNotifySwitch; enabled: alertsSwitch.checked; checked: plasmoid.configuration.notifyOnUpdate }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            enabled: alertsSwitch.checked && updateNotifySwitch.checked
-            spacing: Kirigami.Units.smallSpacing
-            QQC2.Label { text: i18n("Check every:"); Layout.preferredWidth: alertsPage.labelWidth }
-            QQC2.SpinBox { id: updateCheckSpinBox; from: 1; to: 168; stepSize: 1; value: plasmoid.configuration.updateCheckInterval }
-            QQC2.Label { text: i18n("hours"); opacity: 0.7 }
-        }
-
-        QQC2.Label {
-            Layout.fillWidth: true
-            enabled: alertsSwitch.checked
-            text: i18n("Checks GitHub for new releases and shows a KDE notification when an update is available.")
-            font.pointSize: Kirigami.Theme.smallFont.pointSize
-            opacity: 0.5; wrapMode: Text.WordWrap
         }
 
         // ── Cooldown & Do Not Disturb ──
