@@ -453,7 +453,6 @@ plasma-ai-usage-monitor/
     ├── claudecodemonitor.{h,cpp}         # Claude Code usage monitor
     ├── codexclimonitor.{h,cpp}           # Codex CLI usage monitor
     ├── copilotmonitor.{h,cpp}            # GitHub Copilot usage monitor
-    ├── updatechecker.{h,cpp}             # GitHub release update checker
     ├── browsercookieextractor.{h,cpp}    # Firefox cookie extraction for browser sync
     └── usagedatabase.{h,cpp}       # SQLite usage history persistence
 ```

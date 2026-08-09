@@ -103,7 +103,6 @@ ctest --test-dir build --output-on-failure
 | `ClaudeCodeMonitor` | `plugin/claudecodemonitor.{h,cpp}` | Claude Code CLI usage monitor (filesystem watching, Pro/Max5x/Max20x plans) |
 | `CodexCliMonitor` | `plugin/codexclimonitor.{h,cpp}` | OpenAI Codex CLI usage monitor (filesystem watching, Plus/Pro/Business plans) |
 | `CopilotMonitor` | `plugin/copilotmonitor.{h,cpp}` | GitHub Copilot usage monitor (monthly limits, optional GitHub API org metrics) |
-| `UpdateChecker` | `plugin/updatechecker.{h,cpp}` | Checks GitHub releases API for new versions with 30s timeout |
 | `BrowserCookieExtractor` | `plugin/browsercookieextractor.{h,cpp}` | Reads Firefox session cookies for browser sync (read-only, short-lived cache, restrictive temp file permissions) |
 
 ### QML Components
