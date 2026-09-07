@@ -8,7 +8,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QTimeZone>
 #include <KLocalizedString>
+#include <limits>
 
 #include "browsercookieextractor.h"
 
@@ -23,8 +25,27 @@ CodexCliMonitor::CodexCliMonitor(QObject *parent)
     connect(m_debounceTimer, &QTimer::timeout, this, [this]() {
         if (m_pendingIncrement) {
             m_pendingIncrement = false;
-            incrementUsage();
+            // Filesystem events are not percentage points of the subscription quota.
+            if (!lastSyncTime().isValid()) incrementUsage();
         }
+    });
+
+    connect(this, &SubscriptionToolBackend::syncEnabledChanged, this, [this]() {
+        if (isSyncEnabled()) return;
+        for (auto *reply : networkManager()->findChildren<QNetworkReply *>()) reply->abort();
+        if (!lastSyncTime().isValid()) return;
+        // Start a new local estimate rather than treating percentage points as messages.
+        setUsageCount(0);
+        setSecondaryUsageCount(0);
+        setUsageLimit(defaultLimitForPlan(planTier()));
+        setSecondaryUsageLimit(defaultSecondaryLimitForPlan(planTier()));
+        setPeriodStart(QDateTime::currentDateTimeUtc());
+        setSecondaryPeriodStart(QDateTime::currentDateTimeUtc());
+        m_hasTertiary = false;
+        m_hasCreditsData = false;
+        setLastSyncTime(QDateTime());
+        setSyncStatus(i18n("Local estimate"));
+        Q_EMIT usageUpdated();
     });
 
     connect(m_watcher, &QFileSystemWatcher::directoryChanged,
@@ -174,33 +195,39 @@ void CodexCliMonitor::syncFromBrowser(const QString &cookieHeader, int browserTy
         return;
     }
 
-    fetchAccountCheck(cookieHeader);
+    fetchUsage(cookieHeader);
 }
 
-void CodexCliMonitor::fetchAccountCheck(const QString &cookieHeader)
+void CodexCliMonitor::fetchUsage(const QString &cookieHeader, const QString &accessToken)
 {
-    // ChatGPT internal API for account/usage info
-    QUrl url = qEnvironmentVariableIsSet("PLASMA_AI_MONITOR_DEMO")
-        ? QUrl(QStringLiteral("http://localhost:8080/chatgpt/backend-api/accounts/check/v4-2023-04-27"))
-        : QUrl(QStringLiteral("https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27"));
+    // Browser cookies authenticate the session endpoint; Codex usage needs its bearer token.
+    const QString baseUrl = qEnvironmentVariableIsSet("PLASMA_AI_MONITOR_DEMO")
+        ? QStringLiteral("http://localhost:8080/chatgpt") : QStringLiteral("https://chatgpt.com");
+    const bool fetchingSession = accessToken.isEmpty();
+    const QUrl url(baseUrl + (fetchingSession ? QStringLiteral("/api/auth/session")
+                                            : QStringLiteral("/backend-api/wham/usage")));
 
     QNetworkRequest request(url);
     request.setRawHeader("Cookie", cookieHeader.toUtf8());
+    if (!fetchingSession) {
+        request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
+    }
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0");
     // Force HTTP/1.1 — Qt's HTTP/2 implementation triggers 401 on ChatGPT backend API
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     request.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
     request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     request.setTransferTimeout(30000); // 30 second timeout
 
     QNetworkReply *reply = networkManager()->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, cookieHeader, fetchingSession]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
             int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            qWarning() << "CodexCliMonitor: Account check failed:" << reply->errorString() << "HTTP" << httpStatus;
+            qWarning() << "CodexCliMonitor: Sync request failed: HTTP" << httpStatus;
             setSyncing(false);
             if (httpStatus == 401 || httpStatus == 403) {
                 setSyncStatus(i18n("Session expired"));
@@ -229,135 +256,82 @@ void CodexCliMonitor::fetchAccountCheck(const QString &cookieHeader)
 
         QJsonObject root = doc.object();
 
-        // The response contains accounts → account_id → rate_limits and usage
-        // Navigate to the first account
-        QJsonObject accounts = root.value(QStringLiteral("accounts")).toObject();
-        QJsonObject accountData;
-        for (auto it = accounts.begin(); it != accounts.end(); ++it) {
-            accountData = it.value().toObject();
-            break;
+        if (fetchingSession) {
+            const QString token = root.value(QStringLiteral("accessToken")).toString();
+            if (token.isEmpty() || token.contains(QLatin1Char('\r')) || token.contains(QLatin1Char('\n'))) {
+                setSyncing(false);
+                setSyncStatus(i18n("Session expired"));
+                const QString message = i18n("Sign in to chatgpt.com in Firefox again");
+                Q_EMIT syncDiagnostic(toolName(), QStringLiteral("session_expired"), message);
+                Q_EMIT syncCompleted(false, message);
+                return;
+            }
+            fetchUsage(cookieHeader, token);
+            return;
         }
 
-        if (accountData.isEmpty()) {
-            // Try alternate structure
-            accountData = root;
+        const QJsonObject rateLimit = root.value(QStringLiteral("rate_limit")).toObject();
+        QJsonValue primaryValue = rateLimit.value(QStringLiteral("primary_window"));
+        QJsonValue weeklyValue = rateLimit.value(QStringLiteral("secondary_window"));
+        // Some plans return only a weekly quota in primary_window.
+        if (primaryValue.toObject().value(QStringLiteral("limit_window_seconds")).toInt() == 7 * 24 * 3600) {
+            std::swap(primaryValue, weeklyValue);
+        }
+        const QJsonObject primary = primaryValue.toObject();
+        const QJsonObject weekly = weeklyValue.toObject();
+        const auto validWindow = [](const QJsonObject &window) {
+            const QJsonValue used = window.value(QStringLiteral("used_percent"));
+            return used.isDouble() && used.toDouble() >= 0 && used.toDouble() <= 100
+                && window.value(QStringLiteral("reset_at")).toInteger() > 0;
+        };
+        // Do not overwrite the last snapshot or claim success for an unrelated payload.
+        const bool hasPrimary = validWindow(primary);
+        const bool hasWeekly = validWindow(weekly);
+        if ((!hasPrimary && !hasWeekly)
+            || (!primaryValue.isNull() && !primaryValue.isUndefined() && !hasPrimary)
+            || (!weeklyValue.isNull() && !weeklyValue.isUndefined() && !hasWeekly)) {
+            setSyncing(false);
+            setSyncStatus(i18n("Invalid response"));
+            const QString message = i18n("No valid Codex usage data found");
+            Q_EMIT syncDiagnostic(toolName(), QStringLiteral("format_changed"), message);
+            Q_EMIT syncCompleted(false, message);
+            return;
         }
 
-        // Parse rate limits
-        QJsonObject rateLimits = accountData.value(QStringLiteral("rate_limits")).toObject();
-        if (rateLimits.isEmpty()) {
-            qWarning() << "CodexCliMonitor: No rate_limits found in response";
-        }
-        if (!rateLimits.isEmpty()) {
-            // Primary: 5-hour usage limit
-            QJsonObject fiveHour = rateLimits.value(QStringLiteral("message_cap")).toObject();
-            if (fiveHour.isEmpty()) {
-                // Try alternate key
-                for (auto it = rateLimits.begin(); it != rateLimits.end(); ++it) {
-                    QJsonObject rl = it.value().toObject();
-                    QString type = rl.value(QStringLiteral("type")).toString();
-                    if (type.contains(QStringLiteral("5h")) || type.contains(QStringLiteral("five_hour"))) {
-                        fiveHour = rl;
-                        break;
-                    }
-                }
-            }
+        // Disable the local-limit QML binding before changing limits or the detected plan.
+        setLastSyncTime(QDateTime::currentDateTimeUtc());
+        setUsageLimit(hasPrimary ? 100 : 0);
+        setSecondaryUsageLimit(hasWeekly ? 100 : 0);
+        setUsageCount(qRound(primary.value(QStringLiteral("used_percent")).toDouble()));
+        setSecondaryUsageCount(qRound(weekly.value(QStringLiteral("used_percent")).toDouble()));
+        setPeriodStart(hasPrimary ? QDateTime::fromSecsSinceEpoch(primary.value(QStringLiteral("reset_at")).toInteger(), QTimeZone::utc()).addSecs(-5 * 3600) : QDateTime());
+        setSecondaryPeriodStart(hasWeekly ? QDateTime::fromSecsSinceEpoch(weekly.value(QStringLiteral("reset_at")).toInteger(), QTimeZone::utc()).addDays(-7) : QDateTime());
 
-            if (!fiveHour.isEmpty()) {
-                int remaining = fiveHour.value(QStringLiteral("remaining")).toInt(-1);
-                int limit = fiveHour.value(QStringLiteral("limit")).toInt(0);
-                if (limit > 0) {
-                    setUsageLimit(limit);
-                    if (remaining >= 0) setUsageCount(limit - remaining);
-                }
-                // Parse resets_at for primary period
-                QString resetsAt = fiveHour.value(QStringLiteral("resets_at")).toString();
-                if (!resetsAt.isEmpty()) {
-                    QDateTime resetTime = QDateTime::fromString(resetsAt, Qt::ISODate);
-                    if (resetTime.isValid()) {
-                        // Period start = reset time minus 5 hours
-                        setPeriodStart(resetTime.addSecs(-5 * 3600));
-                    }
-                }
-            }
+        const QJsonObject review = root.value(QStringLiteral("code_review_rate_limit")).toObject()
+            .value(QStringLiteral("primary_window")).toObject();
+        m_hasTertiary = validWindow(review);
+        setTertiaryPercentRemaining(m_hasTertiary ? 100 - review.value(QStringLiteral("used_percent")).toDouble() : 0);
+        setTertiaryResetDate(m_hasTertiary
+            ? QDateTime::fromSecsSinceEpoch(review.value(QStringLiteral("reset_at")).toInteger(), QTimeZone::utc()) : QDateTime());
 
-            // Weekly usage limit
-            QJsonObject weekly;
-            for (auto it = rateLimits.begin(); it != rateLimits.end(); ++it) {
-                QJsonObject rl = it.value().toObject();
-                QString type = rl.value(QStringLiteral("type")).toString();
-                if (type.contains(QStringLiteral("week"))) {
-                    weekly = rl;
-                    break;
-                }
-            }
-            if (!weekly.isEmpty()) {
-                int remaining = weekly.value(QStringLiteral("remaining")).toInt(-1);
-                int limit = weekly.value(QStringLiteral("limit")).toInt(0);
-                if (limit > 0) {
-                    setSecondaryUsageLimit(limit);
-                    if (remaining >= 0) setSecondaryUsageCount(limit - remaining);
-                }
-                // Parse resets_at for secondary period
-                QString resetsAt = weekly.value(QStringLiteral("resets_at")).toString();
-                if (!resetsAt.isEmpty()) {
-                    QDateTime resetTime = QDateTime::fromString(resetsAt, Qt::ISODate);
-                    if (resetTime.isValid()) {
-                        // Period start = reset time minus 7 days
-                        setSecondaryPeriodStart(resetTime.addDays(-7));
-                    }
-                }
-            }
+        const QJsonObject credits = root.value(QStringLiteral("credits")).toObject();
+        bool validBalance = false;
+        const double balance = credits.value(QStringLiteral("balance")).toVariant().toDouble(&validBalance);
+        m_hasCreditsData = validBalance && balance >= 0 && balance <= std::numeric_limits<int>::max()
+            && !credits.value(QStringLiteral("unlimited")).toBool();
+        setRemainingCredits(m_hasCreditsData ? static_cast<int>(balance) : 0);
 
-            // Code review (tertiary)
-            QJsonObject codeReview;
-            for (auto it = rateLimits.begin(); it != rateLimits.end(); ++it) {
-                QJsonObject rl = it.value().toObject();
-                QString type = rl.value(QStringLiteral("type")).toString();
-                if (type.contains(QStringLiteral("code_review")) || type.contains(QStringLiteral("review"))) {
-                    codeReview = rl;
-                    break;
-                }
-            }
-            if (!codeReview.isEmpty()) {
-                int remaining = codeReview.value(QStringLiteral("remaining")).toInt(-1);
-                int limit = codeReview.value(QStringLiteral("limit")).toInt(0);
-                if (limit > 0 && remaining >= 0) {
-                    double pctRemaining = (static_cast<double>(remaining) / limit) * 100.0;
-                    setTertiaryPercentRemaining(pctRemaining);
-                    m_hasTertiary = true;
-
-                    QString resetsAt = codeReview.value(QStringLiteral("resets_at")).toString();
-                    if (!resetsAt.isEmpty()) {
-                        setTertiaryResetDate(QDateTime::fromString(resetsAt, Qt::ISODate));
-                    }
-                }
-            }
-        }
-
-        // Parse credits/remaining
-        double credits = accountData.value(QStringLiteral("remaining_credits")).toDouble(-1);
-        if (credits < 0) {
-            // Try alternate path
-            QJsonObject billing = accountData.value(QStringLiteral("billing")).toObject();
-            credits = billing.value(QStringLiteral("remaining_credits")).toDouble(-1);
-        }
-        if (credits >= 0) {
-            setRemainingCredits(credits);
-            m_hasCreditsData = true;
-        }
-
-        // Detect plan from entitlement
-        QString entitlement = accountData.value(QStringLiteral("entitlement")).toString();
-        if (entitlement.contains(QStringLiteral("pro"), Qt::CaseInsensitive)) {
+        const QString plan = root.value(QStringLiteral("plan_type")).toString();
+        if (plan == QStringLiteral("pro")) {
             setPlanTier(QStringLiteral("Pro"));
-        } else if (entitlement.contains(QStringLiteral("plus"), Qt::CaseInsensitive)) {
+        } else if (plan == QStringLiteral("plus")) {
             setPlanTier(QStringLiteral("Plus"));
+        } else if (plan == QStringLiteral("business") || plan == QStringLiteral("team")) {
+            setPlanTier(QStringLiteral("Business"));
         }
 
         // Sync complete
         setSyncing(false);
-        setLastSyncTime(QDateTime::currentDateTimeUtc());
         setSyncStatus(i18n("Synced"));
         Q_EMIT syncCompleted(true, i18n("Codex usage data synced successfully"));
         Q_EMIT usageUpdated();

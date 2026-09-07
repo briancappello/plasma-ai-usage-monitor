@@ -113,7 +113,6 @@ KCM.SimpleKCM {
                 Layout.fillWidth: true
                 model: [i18n("Claude Code"), i18n("OpenCode"), i18n("Codex CLI"), i18n("GitHub Copilot")]
                 currentIndex: plasmoid.configuration.chartToolIndex
-                onCurrentIndexChanged: plasmoid.configuration.chartToolIndex = currentIndex
                 QQC2.ToolTip.text: i18n("Which subscription tool to display in the panel chart")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500

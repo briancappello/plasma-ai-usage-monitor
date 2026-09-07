@@ -291,7 +291,15 @@ PlasmoidItem {
     CodexCliMonitor {
         id: codexCliMonitor
         enabled: plasmoid.configuration.codexEnabled
-        usageLimit: plasmoid.configuration.codexCustomLimit
+
+        property Binding configuredLimit: Binding {
+            target: codexCliMonitor
+            property: "usageLimit"
+            value: plasmoid.configuration.codexCustomLimit > 0
+                ? plasmoid.configuration.codexCustomLimit : codexCliMonitor.defaultLimitForPlan(codexCliMonitor.planTier)
+            when: isNaN(codexCliMonitor.lastSyncTime.getTime())
+            restoreMode: Binding.RestoreNone
+        }
 
         Component.onCompleted: {
             checkToolInstalled();

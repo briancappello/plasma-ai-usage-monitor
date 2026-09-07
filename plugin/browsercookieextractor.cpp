@@ -8,8 +8,8 @@
 #include <QSqlError>
 #include <QDebug>
 #include <QStandardPaths>
-#include <QTemporaryFile>
 #include <QUuid>
+#include <QTemporaryDir>
 
 BrowserCookieExtractor::BrowserCookieExtractor(QObject *parent)
     : QObject(parent)
@@ -220,35 +220,28 @@ QMap<QString, QString> BrowserCookieExtractor::readFirefoxCookies(const QString 
     // Use a unique connection name to avoid conflicts
     QString connName = QStringLiteral("firefox_cookies_") + QUuid::createUuid().toString(QUuid::WithoutBraces);
 
-    // Copy the database to a temp file to avoid Firefox WAL lock issues.
-    // Firefox holds an exclusive lock on cookies.sqlite while running,
-    // so we make a snapshot copy and read from that instead.
-    QTemporaryFile tmpFile;
-    tmpFile.setAutoRemove(true);
-    if (!tmpFile.open()) {
-        qWarning() << "BrowserCookieExtractor: Cannot create temp file for cookie db copy";
+    // Firefox holds an exclusive SQLite lock. Query a private snapshot, including
+    // committed WAL entries, instead of waiting on that lock on Plasma's UI thread.
+    QTemporaryDir snapshot;
+    const QString snapshotPath = snapshot.filePath(QStringLiteral("cookies.sqlite"));
+    if (!snapshot.isValid() || !QFile::copy(dbPath, snapshotPath)) {
+        qWarning() << "BrowserCookieExtractor: Cannot snapshot Firefox cookies";
         return cookies;
     }
-    // Set restrictive permissions — temp file contains session cookies
-    tmpFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-    QString tmpPath = tmpFile.fileName();
-    tmpFile.close();
-
-    if (!QFile::copy(dbPath, tmpPath)) {
-        // QFile::copy fails if dest exists (QTemporaryFile created it), remove first
-        QFile::remove(tmpPath);
-        if (!QFile::copy(dbPath, tmpPath)) {
-            qWarning() << "BrowserCookieExtractor: Cannot copy cookies.sqlite to temp file";
-            return cookies;
-        }
+    const QString walPath = dbPath + QStringLiteral("-wal");
+    if (QFileInfo::exists(walPath) && !QFile::copy(walPath, snapshotPath + QStringLiteral("-wal"))) {
+        qWarning() << "BrowserCookieExtractor: Cannot snapshot Firefox cookie WAL";
+        return cookies;
     }
 
     {
         QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connName);
-        db.setDatabaseName(tmpPath);
+        db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=0"));
+        db.setDatabaseName(snapshotPath);
 
         if (!db.open()) {
             qWarning() << "BrowserCookieExtractor: Cannot open Firefox cookies.sqlite:" << db.lastError().text();
+            db = QSqlDatabase();
             QSqlDatabase::removeDatabase(connName);
             return cookies;
         }
@@ -280,7 +273,6 @@ QMap<QString, QString> BrowserCookieExtractor::readFirefoxCookies(const QString 
     }
 
     QSqlDatabase::removeDatabase(connName);
-    QFile::remove(tmpPath);
 
     // Update cache
     m_cachedDomain = domain;
@@ -336,13 +328,14 @@ QString BrowserCookieExtractor::testConnection(const QString &service) const
         sessionCookieNames = {
             QStringLiteral("sessionKey"),
             QStringLiteral("__Secure-next-auth.session-token"),
+            QStringLiteral("__Secure-next-auth.session-token.0"),
         };
     } else if (service == QStringLiteral("chatgpt") || service == QStringLiteral("codex")) {
         domain = QStringLiteral("chatgpt.com");
         // ChatGPT primary session cookies
         sessionCookieNames = {
             QStringLiteral("__Secure-next-auth.session-token"),
-            QStringLiteral("__Secure-next-auth.callback-url"),
+            QStringLiteral("__Secure-next-auth.session-token.0"),
         };
     } else if (service == QStringLiteral("github")) {
         domain = QStringLiteral("github.com");

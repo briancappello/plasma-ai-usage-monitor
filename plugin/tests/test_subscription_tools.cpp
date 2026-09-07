@@ -7,6 +7,8 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QQmlComponent>
+#include <QQmlEngine>
 
 #include "claudecodemonitor.h"
 #include "codexclimonitor.h"
@@ -26,6 +28,14 @@ public:
     }
 
     bool listen() { return m_server.listen(QHostAddress::LocalHost, 8080); }
+    QByteArray sessionBody = R"({"accessToken":"test-access-token"})";
+    QByteArray codexBody = R"({"plan_type":"pro","rate_limit":{
+        "primary_window":{"used_percent":12,"limit_window_seconds":18000,"reset_at":2000018000},
+        "secondary_window":{"used_percent":37,"limit_window_seconds":604800,"reset_at":2000604800}},
+        "code_review_rate_limit":{"primary_window":{"used_percent":8,"reset_at":2000604800}},
+        "credits":{"has_credits":true,"unlimited":false,"balance":"42"}})";
+    int codexStatus = 200;
+    QList<QByteArray> requests;
 
 private Q_SLOTS:
     void onConnection()
@@ -33,11 +43,17 @@ private Q_SLOTS:
         QTcpSocket *sock = m_server.nextPendingConnection();
         connect(sock, &QTcpSocket::readyRead, this, [this, sock]() {
             const QByteArray req = sock->readAll();
+            requests.append(req);
             const QByteArray firstLine = req.left(req.indexOf('\r'));
 
             QByteArray body;
             int status = 200;
-            if (firstLine.contains("/bootstrap")) {
+            if (firstLine.contains("/chatgpt/api/auth/session")) {
+                body = sessionBody;
+            } else if (firstLine.contains("/chatgpt/backend-api/wham/usage")) {
+                body = codexBody;
+                status = codexStatus;
+            } else if (firstLine.contains("/bootstrap")) {
                 // Two memberships: an API/console org FIRST (whose /usage 403s),
                 // then the Claude Max subscription org. The monitor must pick the
                 // latter by capability and read its plan from rate_limit_tier.
@@ -116,6 +132,11 @@ private Q_SLOTS:
     void browserSyncEmptyCookieDiagnostics();
     void browserSyncUnsupportedBrowserDiagnostics();
     void claudeSyncParsesPercentageUsage();
+    void codexSyncParsesWeeklyUsage();
+    void codexSyncRejectsInvalidResponses_data();
+    void codexSyncRejectsInvalidResponses();
+    void codexSyncSingleWindow_data();
+    void codexSyncSingleWindow();
 };
 
 void SubscriptionToolsTest::planDefaults()
@@ -391,6 +412,181 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     const QVariantMap fable = scoped.first().toMap();
     QCOMPARE(fable.value(QStringLiteral("name")).toString(), QStringLiteral("Fable"));
     QCOMPARE(fable.value(QStringLiteral("percent")).toInt(), 1);
+}
+
+void SubscriptionToolsTest::codexSyncParsesWeeklyUsage()
+{
+    MockClaudeServer server;
+    QVERIFY(server.listen());
+    EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
+    qputenv("PLASMA_AI_MONITOR_DEMO", "1");
+    CodexCliMonitor codex;
+    codex.setSyncEnabled(true);
+    codex.setUsageLimit(45);
+    codex.setSecondaryUsageLimit(500);
+    QSignalSpy completed(&codex, &SubscriptionToolBackend::syncCompleted);
+    codex.syncFromBrowser(QStringLiteral("__Secure-next-auth.session-token.0=test"), 0);
+    QVERIFY(completed.wait(5000));
+    QVERIFY(completed.takeFirst().at(0).toBool());
+    QCOMPARE(server.requests.size(), 2);
+    QVERIFY(server.requests[0].contains("Cookie: __Secure-next-auth.session-token.0=test"));
+    QVERIFY(server.requests[1].contains("Authorization: Bearer test-access-token"));
+    QCOMPARE(codex.planTier(), QStringLiteral("Pro"));
+    QCOMPARE(codex.usageLimit(), 100);
+    QCOMPARE(codex.secondaryUsageLimit(), 100);
+    QCOMPARE(codex.percentUsed(), 12.0);
+    QCOMPARE(codex.secondaryPercentUsed(), 37.0);
+    QCOMPARE(codex.periodEnd().toSecsSinceEpoch(), 2000018000LL);
+    QCOMPARE(codex.secondaryPeriodEnd().toSecsSinceEpoch(), 2000604800LL);
+    QVERIFY(codex.hasTertiaryLimit());
+    QCOMPARE(codex.tertiaryPercentRemaining(), 92.0);
+    QVERIFY(codex.hasCredits());
+    QCOMPARE(codex.remainingCredits(), 42);
+
+    QTemporaryDir home;
+    QVERIFY(home.isValid());
+    EnvVarGuard homeGuard("HOME");
+    qputenv("HOME", home.path().toUtf8());
+    QVERIFY(QDir().mkpath(home.path() + QStringLiteral("/.codex/sessions")));
+    codex.detectActivity();
+    bool debounceTriggered = false;
+    for (QTimer *timer : codex.findChildren<QTimer *>()) {
+        if (timer->interval() == 5000) {
+            QVERIFY(timer->isActive());
+            QVERIFY(QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection));
+            debounceTriggered = true;
+        }
+    }
+    QVERIFY(debounceTriggered);
+    QCOMPARE(codex.percentUsed(), 12.0);
+    QCOMPARE(codex.secondaryPercentUsed(), 37.0);
+
+    // A second snapshot must clear optional data omitted by the server.
+    server.codexBody = R"({"rate_limit":{
+        "primary_window":{"used_percent":0,"reset_at":2000018000},
+        "secondary_window":{"used_percent":100,"reset_at":2000604800}}})";
+    codex.syncFromBrowser(QStringLiteral("session=test"), 0);
+    QVERIFY(completed.wait(5000));
+    QVERIFY(completed.takeFirst().at(0).toBool());
+    QCOMPARE(codex.percentUsed(), 0.0);
+    QCOMPARE(codex.secondaryPercentUsed(), 100.0);
+    QVERIFY(!codex.hasTertiaryLimit());
+    QVERIFY(!codex.hasCredits());
+
+    codex.setSyncEnabled(false);
+    QVERIFY(!codex.lastSyncTime().isValid());
+    QCOMPARE(codex.usageCount(), 0);
+    QCOMPARE(codex.secondaryUsageCount(), 0);
+    QCOMPARE(codex.usageLimit(), codex.defaultLimitForPlan(codex.planTier()));
+}
+
+void SubscriptionToolsTest::codexSyncSingleWindow_data()
+{
+    QTest::addColumn<QByteArray>("window");
+    QTest::addColumn<int>("seconds");
+    QTest::newRow("primary-only") << QByteArray("primary_window") << 18000;
+    QTest::newRow("weekly-only") << QByteArray("secondary_window") << 604800;
+    QTest::newRow("weekly-in-primary") << QByteArray("primary_window") << 604800;
+}
+
+void SubscriptionToolsTest::codexSyncSingleWindow()
+{
+    QFETCH(QByteArray, window);
+    QFETCH(int, seconds);
+    MockClaudeServer server;
+    QVERIFY(server.listen());
+    server.codexBody = "{\"plan_type\":\"pro\",\"rate_limit\":{\"" + window
+        + "\":{\"used_percent\":37,\"reset_at\":2000604800,\"limit_window_seconds\":" + QByteArray::number(seconds) + "}}}";
+    EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
+    qputenv("PLASMA_AI_MONITOR_DEMO", "1");
+    qmlRegisterType<CodexCliMonitor>("Test.Codex", 1, 0, "CodexCliMonitor");
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQml
+        import Test.Codex 1.0
+        CodexCliMonitor {
+            id: monitor
+            property int customLimit: 0
+            property Binding configuredLimit: Binding {
+                target: monitor
+                property: "usageLimit"
+                value: monitor.customLimit > 0 ? monitor.customLimit : monitor.defaultLimitForPlan(monitor.planTier)
+                when: isNaN(monitor.lastSyncTime.getTime())
+                restoreMode: Binding.RestoreNone
+            }
+        })", QUrl());
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *codex = qobject_cast<CodexCliMonitor *>(object.data());
+    QVERIFY(codex);
+    QSignalSpy completed(codex, &SubscriptionToolBackend::syncCompleted);
+    codex->syncFromBrowser(QStringLiteral("session=test"), 0);
+    QVERIFY(completed.wait(5000));
+    QVERIFY(completed.takeFirst().at(0).toBool());
+    object->setProperty("customLimit", 500);
+    QCOMPARE(codex->usageLimit(), seconds == 18000 ? 100 : 0);
+    QCOMPARE(codex->secondaryUsageLimit(), seconds == 604800 ? 100 : 0);
+    QCOMPARE(codex->percentUsed(), seconds == 18000 ? 37.0 : 0.0);
+    QCOMPARE(codex->secondaryPercentUsed(), seconds == 604800 ? 37.0 : 0.0);
+    if (seconds == 604800) QCOMPARE(codex->secondaryPeriodEnd().toSecsSinceEpoch(), 2000604800LL);
+    QVERIFY(codex->metaObject()->property(codex->metaObject()->indexOfProperty("hasCredits")).hasNotifySignal());
+    QVERIFY(codex->metaObject()->property(codex->metaObject()->indexOfProperty("hasTertiaryLimit")).hasNotifySignal());
+}
+
+void SubscriptionToolsTest::codexSyncRejectsInvalidResponses_data()
+{
+    QTest::addColumn<QByteArray>("session");
+    QTest::addColumn<QByteArray>("usage");
+    QTest::addColumn<int>("status");
+    QTest::newRow("expired-session") << QByteArray("{}") << QByteArray("{}") << 200;
+    QTest::newRow("html-session") << QByteArray("<html>Login</html>") << QByteArray("{}") << 200;
+    QTest::newRow("missing-usage") << QByteArray(R"({"accessToken":"test"})") << QByteArray("{}") << 200;
+    QTest::newRow("invalid-percent") << QByteArray(R"({"accessToken":"test"})")
+        << QByteArray(R"({"rate_limit":{"primary_window":{"used_percent":12,"reset_at":2000018000},"secondary_window":{"used_percent":"oops","reset_at":2000604800}}})") << 200;
+    QTest::newRow("forbidden") << QByteArray(R"({"accessToken":"test"})") << QByteArray("{}") << 403;
+}
+
+void SubscriptionToolsTest::codexSyncRejectsInvalidResponses()
+{
+    QFETCH(QByteArray, session);
+    QFETCH(QByteArray, usage);
+    QFETCH(int, status);
+    MockClaudeServer server;
+    QVERIFY(server.listen());
+    server.sessionBody = session;
+    server.codexBody = usage;
+    server.codexStatus = status;
+    EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
+    qputenv("PLASMA_AI_MONITOR_DEMO", "1");
+    CodexCliMonitor codex;
+    codex.setSyncEnabled(true);
+    codex.incrementUsage();
+    QSignalSpy completed(&codex, &SubscriptionToolBackend::syncCompleted);
+    codex.syncFromBrowser(QStringLiteral("session=test"), 0);
+    QVERIFY(completed.wait(5000));
+    QCOMPARE(completed.count(), 1);
+    QVERIFY(!completed.takeFirst().at(0).toBool());
+    QCOMPARE(server.requests.size(), session == QByteArray("{}") || session.startsWith('<') ? 1 : 2);
+    QVERIFY(!codex.isSyncing());
+    QVERIFY(!codex.lastSyncTime().isValid());
+    QCOMPARE(codex.usageCount(), 1);
+    QCOMPARE(codex.secondaryUsageCount(), 1);
+
+    // A failed browser login must not disable the existing local estimate.
+    QTemporaryDir home;
+    QVERIFY(home.isValid());
+    EnvVarGuard homeGuard("HOME");
+    qputenv("HOME", home.path().toUtf8());
+    QVERIFY(QDir().mkpath(home.path() + QStringLiteral("/.codex/sessions")));
+    codex.detectActivity();
+    for (QTimer *timer : codex.findChildren<QTimer *>()) {
+        if (timer->interval() == 5000) {
+            QVERIFY(QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection));
+        }
+    }
+    QCOMPARE(codex.usageCount(), 2);
+    QCOMPARE(codex.secondaryUsageCount(), 2);
 }
 
 QTEST_MAIN(SubscriptionToolsTest)

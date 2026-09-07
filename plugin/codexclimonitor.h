@@ -25,7 +25,10 @@
  *
  * Ranges depend on task complexity. We use the lower bound as default.
  *
- * Browser sync fetches from ChatGPT internal API:
+ * Browser sync exchanges Firefox session cookies for an in-memory access token,
+ * then reads /backend-api/wham/usage. Synced counts use a 0-100 percentage scale,
+ * not the approximate message limits above. Local activity cannot increment them.
+ * The response provides:
  * - 5-hour usage limit (primary)
  * - Weekly usage limit (secondary)
  * - Code review (tertiary)
@@ -80,7 +83,7 @@ private Q_SLOTS:
 private:
     void setupWatcher();
     QString codexConfigDir() const;
-    void fetchAccountCheck(const QString &cookieHeader);
+    void fetchUsage(const QString &cookieHeader, const QString &accessToken = QString());
 
     QFileSystemWatcher *m_watcher;
     QDateTime m_lastKnownModification;

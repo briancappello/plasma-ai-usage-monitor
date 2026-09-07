@@ -95,7 +95,7 @@ target_include_directories(test_subscription_tools
 )
 
 target_link_libraries(test_subscription_tools
-    PRIVATE Qt6::Core Qt6::Test Qt6::Network KF6::I18n
+    PRIVATE Qt6::Core Qt6::Test Qt6::Network Qt6::Qml KF6::I18n
 )
 
 add_test(NAME subscription_tools COMMAND test_subscription_tools)
@@ -152,3 +152,27 @@ add_test(NAME usagedatabase_extended COMMAND test_usagedatabase_extended)
 # --- Script-based tests ---
 add_test(NAME version_consistency COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_version_consistency.sh)
 add_test(NAME no_hardcoded_versions COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_no_hardcoded_versions.sh)
+add_test(NAME plasma_reload COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_reload_plasma.sh)
+add_test(NAME staged_settings COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/check_staged_settings.sh)
+
+# --- Browser cookie extraction regression test ---
+add_executable(test_browsercookieextractor
+    test_browsercookieextractor.cpp
+    ${CMAKE_SOURCE_DIR}/plugin/browsercookieextractor.cpp
+)
+target_include_directories(test_browsercookieextractor PRIVATE ${CMAKE_SOURCE_DIR}/plugin)
+target_link_libraries(test_browsercookieextractor PRIVATE Qt6::Core Qt6::Test Qt6::Sql)
+add_test(NAME browsercookieextractor COMMAND test_browsercookieextractor)
+
+find_program(QMLTESTRUNNER NAMES qmltestrunner6 qmltestrunner HINTS /usr/lib/qt6/bin /usr/lib64/qt6/bin)
+if(QMLTESTRUNNER)
+    add_test(NAME compact_chart COMMAND ${QMLTESTRUNNER} -input ${CMAKE_CURRENT_SOURCE_DIR}/tst_compactchart.qml)
+    set_tests_properties(compact_chart PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qml/com/github/loofi/aiusagemonitor/qmldir"
+        CONTENT "module com.github.loofi.aiusagemonitor\nplugin aiusagemonitorplugin $<TARGET_FILE_DIR:aiusagemonitorplugin>\n")
+    add_test(NAME config_general COMMAND ${QMLTESTRUNNER} -import ${CMAKE_CURRENT_BINARY_DIR}/qml
+        -input ${CMAKE_CURRENT_SOURCE_DIR}/tst_configgeneral.qml)
+    set_tests_properties(config_general PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+else()
+    message(WARNING "qmltestrunner not found; compact_chart test will not run")
+endif()

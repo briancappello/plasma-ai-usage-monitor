@@ -87,14 +87,14 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(bool syncing READ isSyncing NOTIFY syncStatusChanged)
 
     // Tertiary usage (e.g., Codex code‐review cap)
-    Q_PROPERTY(bool hasTertiaryLimit READ hasTertiaryLimit CONSTANT)
+    Q_PROPERTY(bool hasTertiaryLimit READ hasTertiaryLimit NOTIFY usageUpdated)
     Q_PROPERTY(QString tertiaryPeriodLabel READ tertiaryPeriodLabel CONSTANT)
     Q_PROPERTY(double tertiaryPercentRemaining READ tertiaryPercentRemaining NOTIFY usageUpdated)
     Q_PROPERTY(QDateTime tertiaryResetDate READ tertiaryResetDate NOTIFY usageUpdated)
 
     // Credits (e.g., Codex remaining credits)
     Q_PROPERTY(int remainingCredits READ remainingCredits NOTIFY usageUpdated)
-    Q_PROPERTY(bool hasCredits READ hasCredits CONSTANT)
+    Q_PROPERTY(bool hasCredits READ hasCredits NOTIFY usageUpdated)
 
     // Per-model scoped weekly limits (e.g., Claude's "Fable"). Variable length;
     // each entry is a map { name, percent, resetsAt }. Empty for tools that

@@ -59,7 +59,8 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor && t.monitor.percentUsed >= 80) return true;
+            if (t && t.enabled && t.monitor
+                && (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 80) return true;
         }
         return false;
     }
@@ -75,7 +76,8 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor && (t.monitor.limitReached || t.monitor.percentUsed >= 95)) return true;
+            if (t && t.enabled && t.monitor && (t.monitor.limitReached
+                || (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 95)) return true;
         }
         return false;
     }
@@ -172,7 +174,7 @@ MouseArea {
         }
     }
 
-    // Chart mode — subscription tool session usage bar + reset countdown
+    // Chart mode: primary quota, or weekly quota for plans without a primary window.
     Item {
         id: chartMode
         anchors.fill: parent
@@ -186,6 +188,7 @@ MouseArea {
             allTools.length - 1)
         readonly property var selectedTool: allTools.length > 0 ? allTools[toolIdx] : null
         readonly property var ccMonitor: selectedTool ? selectedTool.monitor : null
+        readonly property bool useSecondary: compactRoot.usesSecondaryQuota(ccMonitor)
         readonly property bool ccAvailable: ccMonitor
                                             && selectedTool && selectedTool.enabled
                                             && ccMonitor.installed
@@ -218,11 +221,13 @@ MouseArea {
             text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
 
             function formatCountdown() {
-                var secs = chartMode.ccMonitor.secondsUntilReset;
+                var secs = chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilReset
+                                                  : chartMode.ccMonitor.secondsUntilReset;
                 if (secs <= 0) return i18n("reset");
                 var h = Math.floor(secs / 3600);
                 var m = Math.floor((secs % 3600) / 60);
                 var s = secs % 60;
+                if (h >= 24) return Math.floor(h / 24) + "d " + (h % 24) + "h";
                 if (h > 0)
                     return h + "h " + (m < 10 ? "0" : "") + m + "m";
                 return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
@@ -260,7 +265,9 @@ MouseArea {
             Rectangle {
                 id: usageFill
                 readonly property double pct: chartMode.ccAvailable
-                    ? Math.min(1.0, (chartMode.ccMonitor.sessionPercentUsed > 0
+                    ? Math.min(1.0, (chartMode.useSecondary
+                        ? chartMode.ccMonitor.secondaryPercentUsed / 100.0
+                        : chartMode.ccMonitor.sessionPercentUsed > 0
                         ? chartMode.ccMonitor.sessionPercentUsed / 100.0
                         : chartMode.ccMonitor.percentUsed / 100.0))
                     : 0.0
@@ -346,6 +353,11 @@ MouseArea {
         anchors.fill: parent
         visible: compactRoot.anyLoading
         running: visible
+    }
+
+    function usesSecondaryQuota(monitor) {
+        return !!monitor && monitor.usageLimit <= 0
+            && monitor.hasSecondaryLimit && monitor.secondaryUsageLimit > 0;
     }
 
     function formatMetric(value) {

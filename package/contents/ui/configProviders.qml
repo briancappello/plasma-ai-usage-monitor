@@ -198,7 +198,6 @@ KCM.SimpleKCM {
                 id: anthropicModelField; Layout.fillWidth: true; enabled: anthropicSwitch.checked; editable: true
                 editText: plasmoid.configuration.anthropicModel
                 model: ["claude-sonnet-4-20250514","claude-opus-4-20250514","claude-haiku-4-20250514","claude-3-7-sonnet-20250219","claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022"]
-                onEditTextChanged: plasmoid.configuration.anthropicModel = editText
                 property alias text: anthropicModelField.editText
             }
         }
@@ -233,7 +232,6 @@ KCM.SimpleKCM {
                 id: googleModelField; Layout.fillWidth: true; enabled: googleSwitch.checked; editable: true
                 editText: plasmoid.configuration.googleModel
                 model: ["gemini-2.5-pro","gemini-2.5-flash","gemini-2.0-flash","gemini-2.0-flash-lite","gemini-1.5-pro","gemini-1.5-flash"]
-                onEditTextChanged: plasmoid.configuration.googleModel = editText
                 property alias text: googleModelField.editText
             }
         }
@@ -274,7 +272,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: mistralModelField; Layout.fillWidth: true; enabled: mistralSwitch.checked; editable: true; editText: plasmoid.configuration.mistralModel; model: ["mistral-large-latest","mistral-medium-latest","mistral-small-latest","open-mistral-7b","open-mixtral-8x7b","codestral-latest"]; onEditTextChanged: plasmoid.configuration.mistralModel = editText; property alias text: mistralModelField.editText }
+            QQC2.ComboBox { id: mistralModelField; Layout.fillWidth: true; enabled: mistralSwitch.checked; editable: true; editText: plasmoid.configuration.mistralModel; model: ["mistral-large-latest","mistral-medium-latest","mistral-small-latest","open-mistral-7b","open-mixtral-8x7b","codestral-latest"]; property alias text: mistralModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: mistralBaseUrlField; Layout.fillWidth: true; enabled: mistralSwitch.checked; text: plasmoid.configuration.mistralCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(mistralBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -301,7 +299,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: deepseekModelField; Layout.fillWidth: true; enabled: deepseekSwitch.checked; editable: true; editText: plasmoid.configuration.deepseekModel; model: ["deepseek-chat","deepseek-coder","deepseek-reasoner"]; onEditTextChanged: plasmoid.configuration.deepseekModel = editText; property alias text: deepseekModelField.editText }
+            QQC2.ComboBox { id: deepseekModelField; Layout.fillWidth: true; enabled: deepseekSwitch.checked; editable: true; editText: plasmoid.configuration.deepseekModel; model: ["deepseek-chat","deepseek-coder","deepseek-reasoner"]; property alias text: deepseekModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: deepseekBaseUrlField; Layout.fillWidth: true; enabled: deepseekSwitch.checked; text: plasmoid.configuration.deepseekCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(deepseekBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -328,7 +326,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: groqModelField; Layout.fillWidth: true; enabled: groqSwitch.checked; editable: true; editText: plasmoid.configuration.groqModel; model: ["llama-3.3-70b-versatile","llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma2-9b-it"]; onEditTextChanged: plasmoid.configuration.groqModel = editText; property alias text: groqModelField.editText }
+            QQC2.ComboBox { id: groqModelField; Layout.fillWidth: true; enabled: groqSwitch.checked; editable: true; editText: plasmoid.configuration.groqModel; model: ["llama-3.3-70b-versatile","llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma2-9b-it"]; property alias text: groqModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: groqBaseUrlField; Layout.fillWidth: true; enabled: groqSwitch.checked; text: plasmoid.configuration.groqCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(groqBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -355,7 +353,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: xaiModelField; Layout.fillWidth: true; enabled: xaiSwitch.checked; editable: true; editText: plasmoid.configuration.xaiModel; model: ["grok-3","grok-3-mini","grok-2","grok-2-mini"]; onEditTextChanged: plasmoid.configuration.xaiModel = editText; property alias text: xaiModelField.editText }
+            QQC2.ComboBox { id: xaiModelField; Layout.fillWidth: true; enabled: xaiSwitch.checked; editable: true; editText: plasmoid.configuration.xaiModel; model: ["grok-3","grok-3-mini","grok-2","grok-2-mini"]; property alias text: xaiModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: xaiBaseUrlField; Layout.fillWidth: true; enabled: xaiSwitch.checked; text: plasmoid.configuration.xaiCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(xaiBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -382,7 +380,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: openrouterModelField; Layout.fillWidth: true; enabled: openrouterSwitch.checked; editable: true; editText: plasmoid.configuration.openrouterModel; model: ["openai/gpt-4o","openai/gpt-4o-mini","openai/gpt-4.1","openai/gpt-4.1-mini","openai/o3","openai/o4-mini","anthropic/claude-sonnet-4","anthropic/claude-opus-4","google/gemini-2.5-pro","google/gemini-2.5-flash","meta-llama/llama-3.3-70b-instruct","meta-llama/llama-4-maverick","deepseek/deepseek-chat-v3","deepseek/deepseek-r1","x-ai/grok-3","x-ai/grok-3-mini","qwen/qwen-2.5-72b-instruct","mistralai/mistral-large"]; onEditTextChanged: plasmoid.configuration.openrouterModel = editText; property alias text: openrouterModelField.editText }
+            QQC2.ComboBox { id: openrouterModelField; Layout.fillWidth: true; enabled: openrouterSwitch.checked; editable: true; editText: plasmoid.configuration.openrouterModel; model: ["openai/gpt-4o","openai/gpt-4o-mini","openai/gpt-4.1","openai/gpt-4.1-mini","openai/o3","openai/o4-mini","anthropic/claude-sonnet-4","anthropic/claude-opus-4","google/gemini-2.5-pro","google/gemini-2.5-flash","meta-llama/llama-3.3-70b-instruct","meta-llama/llama-4-maverick","deepseek/deepseek-chat-v3","deepseek/deepseek-r1","x-ai/grok-3","x-ai/grok-3-mini","qwen/qwen-2.5-72b-instruct","mistralai/mistral-large"]; property alias text: openrouterModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: openrouterBaseUrlField; Layout.fillWidth: true; enabled: openrouterSwitch.checked; text: plasmoid.configuration.openrouterCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(openrouterBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -409,7 +407,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: togetherModelField; Layout.fillWidth: true; enabled: togetherSwitch.checked; editable: true; editText: plasmoid.configuration.togetherModel; model: ["meta-llama/Llama-3.3-70B-Instruct-Turbo","meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo","meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo","meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8","meta-llama/Llama-4-Scout-17B-16E-Instruct","Qwen/Qwen2.5-72B-Instruct-Turbo","Qwen/Qwen2.5-7B-Instruct-Turbo","deepseek-ai/DeepSeek-V3","deepseek-ai/DeepSeek-R1","mistralai/Mixtral-8x7B-Instruct-v0.1","google/gemma-2-27b-it"]; onEditTextChanged: plasmoid.configuration.togetherModel = editText; property alias text: togetherModelField.editText }
+            QQC2.ComboBox { id: togetherModelField; Layout.fillWidth: true; enabled: togetherSwitch.checked; editable: true; editText: plasmoid.configuration.togetherModel; model: ["meta-llama/Llama-3.3-70B-Instruct-Turbo","meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo","meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo","meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8","meta-llama/Llama-4-Scout-17B-16E-Instruct","Qwen/Qwen2.5-72B-Instruct-Turbo","Qwen/Qwen2.5-7B-Instruct-Turbo","deepseek-ai/DeepSeek-V3","deepseek-ai/DeepSeek-R1","mistralai/Mixtral-8x7B-Instruct-v0.1","google/gemma-2-27b-it"]; property alias text: togetherModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: togetherBaseUrlField; Layout.fillWidth: true; enabled: togetherSwitch.checked; text: plasmoid.configuration.togetherCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(togetherBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -436,7 +434,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: cohereModelField; Layout.fillWidth: true; enabled: cohereSwitch.checked; editable: true; editText: plasmoid.configuration.cohereModel; model: ["command-a-03-2025","command-r-plus-08-2024","command-r-plus","command-r-08-2024","command-r","command-light","command"]; onEditTextChanged: plasmoid.configuration.cohereModel = editText; property alias text: cohereModelField.editText }
+            QQC2.ComboBox { id: cohereModelField; Layout.fillWidth: true; enabled: cohereSwitch.checked; editable: true; editText: plasmoid.configuration.cohereModel; model: ["command-a-03-2025","command-r-plus-08-2024","command-r-plus","command-r-08-2024","command-r","command-light","command"]; property alias text: cohereModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Custom base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: cohereBaseUrlField; Layout.fillWidth: true; enabled: cohereSwitch.checked; text: plasmoid.configuration.cohereCustomBaseUrl; placeholderText: i18n("Leave empty for default"); QQC2.ToolTip.text: i18n("Override the API endpoint for proxies or self-hosted gateways. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
         QQC2.Label { visible: providersPage.isInvalidUrl(cohereBaseUrlField.text); Layout.fillWidth: true; text: i18n("⚠ URL must start with https:// or http://"); color: Kirigami.Theme.negativeTextColor; font.pointSize: Kirigami.Theme.smallFont.pointSize; wrapMode: Text.WordWrap }
@@ -463,7 +461,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: googleveoModelField; Layout.fillWidth: true; enabled: googleveoSwitch.checked; editable: true; editText: plasmoid.configuration.googleveoModel; model: ["veo-3","veo-2"]; onEditTextChanged: plasmoid.configuration.googleveoModel = editText; property alias text: googleveoModelField.editText }
+            QQC2.ComboBox { id: googleveoModelField; Layout.fillWidth: true; enabled: googleveoSwitch.checked; editable: true; editText: plasmoid.configuration.googleveoModel; model: ["veo-3","veo-2"]; property alias text: googleveoModelField.editText }
         }
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
@@ -502,7 +500,7 @@ KCM.SimpleKCM {
         RowLayout {
             Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
             QQC2.Label { text: i18n("Model:"); Layout.preferredWidth: providersPage.labelWidth }
-            QQC2.ComboBox { id: azureModelField; Layout.fillWidth: true; enabled: azureSwitch.checked; editable: true; editText: plasmoid.configuration.azureModel; model: ["gpt-4o","gpt-4o-mini","gpt-4","gpt-4-turbo","gpt-35-turbo"]; onEditTextChanged: plasmoid.configuration.azureModel = editText; property alias text: azureModelField.editText }
+            QQC2.ComboBox { id: azureModelField; Layout.fillWidth: true; enabled: azureSwitch.checked; editable: true; editText: plasmoid.configuration.azureModel; model: ["gpt-4o","gpt-4o-mini","gpt-4","gpt-4-turbo","gpt-35-turbo"]; property alias text: azureModelField.editText }
         }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Deployment ID:"); Layout.preferredWidth: providersPage.labelWidth } QQC2.TextField { id: azureDeploymentField; Layout.fillWidth: true; enabled: azureSwitch.checked; text: plasmoid.configuration.azureDeploymentId; placeholderText: i18n("Your deployment name") } }
         RowLayout { Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing; QQC2.Label { text: i18n("Endpoint base URL:"); Layout.preferredWidth: providersPage.labelWidth; wrapMode: Text.WordWrap } QQC2.TextField { id: azureBaseUrlField; Layout.fillWidth: true; enabled: azureSwitch.checked; text: plasmoid.configuration.azureCustomBaseUrl; placeholderText: i18n("https://<resource>.openai.azure.com"); QQC2.ToolTip.text: i18n("Azure endpoint base URL. Must start with https://"); QQC2.ToolTip.visible: hovered; QQC2.ToolTip.delay: 500 } }
