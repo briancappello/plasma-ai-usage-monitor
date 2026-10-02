@@ -37,7 +37,10 @@ Item {
             compare(page.cfg_chartToolIndex, 0);
             page.cfg_chartToolIndex = 1;
             // Plasma's Apply/OK handler copies cfg_* values into configuration.
-            plasmoid.configuration.chartToolIndex = page.cfg_chartToolIndex;
+            Object.keys(plasmoid.configuration).forEach(key => {
+                const cfgKey = "cfg_" + key;
+                if (cfgKey in page) plasmoid.configuration[key] = page[cfgKey];
+            });
             compare(plasmoid.configuration.chartToolIndex, 1);
             page.destroy();
             wait(0);

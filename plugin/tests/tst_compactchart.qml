@@ -7,7 +7,7 @@ Item {
     width: 180
     height: 46
     property var allProviders: []
-    property var allSubscriptionTools: [{ enabled: true, monitor: monitor }]
+    property var allSubscriptionTools: [{ enabled: true, monitor: monitor }, { enabled: true, monitor: secondMonitor }]
     property int connectedCount: 0
     function i18n(text) { return text; }
 
@@ -38,6 +38,22 @@ Item {
     }
 
     Widget.CompactRepresentation { id: compact; anchors.fill: parent }
+
+    QtObject {
+        id: secondMonitor
+        property bool installed: true
+        property bool hasSubscriptionCost: false
+        property bool hasSecondaryLimit: true
+        property int usageLimit: 100
+        property int secondaryUsageLimit: 100
+        property real sessionPercentUsed: 23
+        property real percentUsed: 23
+        property real secondaryPercentUsed: 64
+        property int secondsUntilReset: 3600
+        property int secondarySecondsUntilReset: 86400
+        property bool limitReached: false
+        signal usageUpdated()
+    }
 
     TestCase {
         name: "CompactSubscriptionChart"
@@ -78,6 +94,12 @@ Item {
             monitor.sessionPercentUsed = 0;
             monitor.percentUsed = 0;
             compare(fill.pct, 0);
+
+            for (var index of [1, 0, 1, 0, 1]) {
+                plasmoid.configuration.chartToolIndex = index;
+                compare(fill.pct, index === 1 ? 0.23 : 0);
+                compare(countdown.formatCountdown(), index === 1 ? "1h 00m" : "2h 03m");
+            }
         }
     }
 }
