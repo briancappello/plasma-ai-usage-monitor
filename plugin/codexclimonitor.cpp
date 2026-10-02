@@ -227,7 +227,8 @@ void CodexCliMonitor::fetchUsage(const QString &cookieHeader, const QString &acc
 
         if (reply->error() != QNetworkReply::NoError) {
             int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            qWarning() << "CodexCliMonitor: Sync request failed: HTTP" << httpStatus;
+            qWarning() << "CodexCliMonitor:" << (fetchingSession ? "Session fetch failed:" : "Usage fetch failed:")
+                       << reply->errorString() << "HTTP" << httpStatus;
             setSyncing(false);
             if (httpStatus == 401 || httpStatus == 403) {
                 setSyncStatus(i18n("Session expired"));
