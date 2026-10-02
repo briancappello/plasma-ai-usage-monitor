@@ -62,11 +62,18 @@ PlasmoidItem {
     property alias cursor: cursorMonitor
     property alias windsurf: windsurfMonitor
 
-    // Notification cooldown tracking
-    property var lastNotificationTimes: ({})
     readonly property string brandedNotificationIcon: "com.github.loofi.aiusagemonitor"
     readonly property string warningNotificationIcon: "dialog-warning"
     readonly property string errorNotificationIcon: "dialog-error"
+
+    // Notification de-duplication. See NotificationGate.qml: an alert fires once
+    // per occurrence and only re-arms when the condition clears.
+    NotificationGate {
+        id: gate
+        cooldownMinutes: plasmoid.configuration.notificationCooldownMinutes
+        dndStartHour: plasmoid.configuration.dndStartHour
+        dndEndHour: plasmoid.configuration.dndEndHour
+    }
 
     // ── Secrets Manager (KWallet) ──
     SecretsManager {
@@ -255,6 +262,9 @@ PlasmoidItem {
         onSyncDiagnostic: function(toolName, code, message) {
             handleToolSyncDiagnostic(toolName, code, message);
         }
+        onSyncCompleted: function(success, message) {
+            handleToolSyncCompleted(claudeCodeMonitor, success);
+        }
         onUsageUpdated: {
             recordToolUsageSnapshot(claudeCodeMonitor);
         }
@@ -322,6 +332,9 @@ PlasmoidItem {
         onSyncDiagnostic: function(toolName, code, message) {
             handleToolSyncDiagnostic(toolName, code, message);
         }
+        onSyncCompleted: function(success, message) {
+            handleToolSyncCompleted(codexCliMonitor, success);
+        }
         onUsageUpdated: {
             recordToolUsageSnapshot(codexCliMonitor);
         }
@@ -357,6 +370,9 @@ PlasmoidItem {
         }
         onSyncDiagnostic: function(toolName, code, message) {
             handleToolSyncDiagnostic(toolName, code, message);
+        }
+        onSyncCompleted: function(success, message) {
+            handleToolSyncCompleted(copilotMonitor, success);
         }
         onUsageUpdated: {
             recordToolUsageSnapshot(copilotMonitor);
@@ -793,10 +809,16 @@ PlasmoidItem {
     }
 
     function makeErrorHandler(displayName, configKey, backend) {
+        var title = i18n("%1 Error", displayName);
         return function() {
-            if (backend.error && plasmoid.configuration.notifyOnError
+            // errorChanged also fires on recovery; that is what re-arms the alert.
+            if (!backend.error) {
+                clearNotification("error_" + title);
+                return;
+            }
+            if (plasmoid.configuration.notifyOnError
                 && plasmoid.configuration[configKey + "NotificationsEnabled"]) {
-                sendNotification(i18n("%1 Error", displayName), backend.error);
+                sendNotification(title, backend.error);
             }
         };
     }
@@ -804,8 +826,32 @@ PlasmoidItem {
     function makeSnapshotHandler(dbName, backend) {
         return function() {
             recordProviderSnapshot(dbName, backend);
+            resetProviderNotificationState(backend);
             calculateMonthlyProjection(); // Trigger update
         };
+    }
+
+    // Re-arms a provider's threshold alerts once it drops back into a healthy
+    // range, so the next breach is reported again.
+    function resetProviderNotificationState(backend) {
+        var provider = backend.name;
+
+        if (backend.rateLimitRequests > 0) {
+            var usedPercent = 100 - (backend.rateLimitRequestsRemaining * 100 / backend.rateLimitRequests);
+            if (usedPercent < plasmoid.configuration.warningThreshold) {
+                clearNotification("quota_" + provider);
+            }
+        }
+
+        var warningFraction = backend.budgetWarningPercent / 100.0;
+        if (backend.dailyBudget > 0 && backend.dailyCost < backend.dailyBudget * warningFraction) {
+            clearNotification("budgetwarn_" + provider + "_daily");
+            clearNotification("budget_" + provider + "_daily");
+        }
+        if (backend.monthlyBudget > 0 && backend.monthlyCost < backend.monthlyBudget * warningFraction) {
+            clearNotification("budgetwarn_" + provider + "_monthly");
+            clearNotification("budget_" + provider + "_monthly");
+        }
     }
 
     function providerConfigKey(providerName) {
@@ -827,47 +873,37 @@ PlasmoidItem {
         return plasmoid.configuration[key + "NotificationsEnabled"];
     }
 
-    function canNotify(eventKey) {
-        var cooldown = plasmoid.configuration.notificationCooldownMinutes * 60 * 1000;
-        var now = Date.now();
-        var last = lastNotificationTimes[eventKey] || 0;
-        if (now - last < cooldown) return false;
-
-        // Check DND
-        var dndStart = plasmoid.configuration.dndStartHour;
-        var dndEnd = plasmoid.configuration.dndEndHour;
-        if (dndStart >= 0 && dndEnd >= 0) {
-            var hour = new Date().getHours();
-            if (dndStart < dndEnd) {
-                if (hour >= dndStart && hour < dndEnd) return false;
-            } else {
-                // Overnight DND (e.g., 22:00 - 07:00)
-                if (hour >= dndStart || hour < dndEnd) return false;
-            }
-        }
-
-        lastNotificationTimes[eventKey] = now;
-        return true;
-    }
+    // Thin delegates onto the gate, kept so call sites read as intent.
+    function canNotify(eventKey, signature) { return gate.canNotify(eventKey, signature); }
+    function clearNotification(eventKey) { gate.clear(eventKey); }
+    function clearNotifications(prefix) { gate.clearPrefix(prefix); }
+    function withinCooldown(key) { return gate.withinCooldown(key); }
 
     function handleQuotaWarning(provider, percentUsed) {
         if (!plasmoid.configuration.alertsEnabled) return;
         if (!isProviderNotificationEnabled(provider)) return;
-        if (!canNotify("quota_" + provider)) return;
-
-        // Record event in database
-        usageDatabase.recordRateLimitEvent(provider,
-            percentUsed >= plasmoid.configuration.criticalThreshold ? "critical" : "warning",
-            percentUsed);
 
         var isCritical = percentUsed >= plasmoid.configuration.criticalThreshold;
         var isWarning = percentUsed >= plasmoid.configuration.warningThreshold;
+
+        // History is sampled on its own schedule: the notification latch below
+        // fires once per breach, which would otherwise leave gaps in the record.
+        if (isCritical || isWarning) {
+            if (!withinCooldown("quotarecord_" + provider)) {
+                usageDatabase.recordRateLimitEvent(provider,
+                    isCritical ? "critical" : "warning", percentUsed);
+            }
+        }
+
+        if (!isCritical && !isWarning) return;
+        // Escalating from warning to critical is a new alert, not a reminder.
+        if (!canNotify("quota_" + provider, isCritical ? "critical" : "warning")) return;
 
         if (isCritical) {
             warningNotification.text = i18n("%1: CRITICAL - %2% of rate limit used!", provider, percentUsed);
             warningNotification.urgency = Notification.CriticalUrgency;
             warningNotification.sendEvent();
-        } else if (isWarning) {
+        } else {
             warningNotification.text = i18n("%1: Warning - %2% of rate limit used", provider, percentUsed);
             warningNotification.urgency = Notification.NormalUrgency;
             warningNotification.sendEvent();
@@ -900,6 +936,9 @@ PlasmoidItem {
     }
 
     function handleProviderDisconnected(provider) {
+        // Re-arm the opposite edge first: without this the latch would swallow
+        // every outage after the first one.
+        clearNotification("reconnect_" + provider);
         if (!plasmoid.configuration.notifyOnDisconnect) return;
         if (!isProviderNotificationEnabled(provider)) return;
         if (!canNotify("disconnect_" + provider)) return;
@@ -912,6 +951,7 @@ PlasmoidItem {
     }
 
     function handleProviderReconnected(provider) {
+        clearNotification("disconnect_" + provider);
         if (!plasmoid.configuration.notifyOnReconnect) return;
         if (!isProviderNotificationEnabled(provider)) return;
         if (!canNotify("reconnect_" + provider)) return;
@@ -924,7 +964,9 @@ PlasmoidItem {
     }
 
     function sendNotification(title, message) {
-        if (!canNotify("error_" + title)) return;
+        // The message is the signature, so a different failure still gets
+        // through while the same one is never repeated.
+        if (!canNotify("error_" + title, message)) return;
         errorNotification.title = title;
         errorNotification.text = message;
         errorNotification.sendEvent();
@@ -971,7 +1013,7 @@ PlasmoidItem {
         if (!plasmoid.configuration.alertsEnabled) return;
         if (!isToolNotificationEnabled(toolName)) return;
         if (code === "not_logged_in" || code === "cookies_not_found") return;
-        if (!canNotify("tool_sync_" + toolName + "_" + code)) return;
+        if (!canNotify("tool_sync_" + toolName + "_" + code, message)) return;
 
         var severity = Notification.LowUrgency;
         if (code === "session_expired" || code === "format_changed" || code === "organization_missing") {
@@ -985,7 +1027,24 @@ PlasmoidItem {
         subscriptionNotification.sendEvent();
     }
 
+    // A successful sync re-arms that tool's sync diagnostics, so the next time
+    // the session really breaks the user is told once more.
+    function handleToolSyncCompleted(monitor, success) {
+        if (success) clearNotifications("tool_sync_" + monitor.toolName + "_");
+    }
+
+    // Re-arms a tool's threshold alerts once usage falls back under the limit,
+    // which is what happens when the billing period rolls over.
+    function resetToolNotificationState(monitor) {
+        var toolName = monitor.toolName;
+        if (!monitor.limitReached) clearNotification("tool_limit_" + toolName);
+        if (monitor.percentUsed < plasmoid.configuration.warningThreshold) {
+            clearNotification("tool_warning_" + toolName);
+        }
+    }
+
     function recordToolUsageSnapshot(monitor) {
+        resetToolNotificationState(monitor);
         if (!usageDatabase.enabled) return;
         usageDatabase.recordToolSnapshot(
             monitor.toolName,

@@ -173,6 +173,9 @@ if(QMLTESTRUNNER)
     add_test(NAME config_general COMMAND ${QMLTESTRUNNER} -import ${CMAKE_CURRENT_BINARY_DIR}/qml
         -input ${CMAKE_CURRENT_SOURCE_DIR}/tst_configgeneral.qml)
     set_tests_properties(config_general PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    add_test(NAME notification_gate COMMAND ${QMLTESTRUNNER}
+        -input ${CMAKE_CURRENT_SOURCE_DIR}/tst_notificationgate.qml)
+    set_tests_properties(notification_gate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 else()
     message(WARNING "qmltestrunner not found; compact_chart test will not run")
 endif()
