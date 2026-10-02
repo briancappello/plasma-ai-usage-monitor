@@ -93,6 +93,9 @@ UsageDatabase::~UsageDatabase()
     if (m_db.isOpen()) {
         m_db.close();
     }
+    // Drop our handle first: removeDatabase() refuses to cleanly release a
+    // connection that a live QSqlDatabase object still references.
+    m_db = QSqlDatabase();
     QSqlDatabase::removeDatabase(m_connectionName);
 }
 

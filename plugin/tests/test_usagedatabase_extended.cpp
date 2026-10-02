@@ -54,6 +54,7 @@ private Q_SLOTS:
     void testGetDailyCosts();
     void testPruneOldData();
     void testDisabledRecording();
+    void testDestructorReleasesConnectionCleanly();
 };
 
 void UsageDatabaseExtendedTest::testRetentionDaysClamping()
@@ -267,6 +268,28 @@ void UsageDatabaseExtendedTest::testDisabledRecording()
     QVariantList snapshots = db.getSnapshots(QStringLiteral("DisabledProv"), from, to);
 
     QCOMPARE(snapshots.size(), 0);
+}
+
+void UsageDatabaseExtendedTest::testDestructorReleasesConnectionCleanly()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    qputenv("XDG_DATA_HOME", tmp.path().toUtf8());
+
+    // Destroying the database while it still holds its QSqlDatabase handle
+    // makes Qt warn "connection ... is still in use" on every plasmashell exit.
+    QTest::failOnWarning(QRegularExpression(QStringLiteral("removeDatabase: connection .* is still in use")));
+
+    {
+        UsageDatabase db;
+        db.init();
+        db.recordToolSnapshot(QStringLiteral("Claude Code"), 1, 45, QStringLiteral("5-hour"),
+                              QStringLiteral("Pro"), false);
+    }
+
+    for (const QString &name : QSqlDatabase::connectionNames()) {
+        QVERIFY2(!name.startsWith(QStringLiteral("aiusagemonitor_history_")), qPrintable(name));
+    }
 }
 
 QTEST_MAIN(UsageDatabaseExtendedTest)
