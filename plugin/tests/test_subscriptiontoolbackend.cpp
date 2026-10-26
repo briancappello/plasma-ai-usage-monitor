@@ -2,6 +2,7 @@
 #include <QSignalSpy>
 
 #include "subscriptiontoolbackend.h"
+#include "resilientnetworkaccessmanager.h"
 
 /**
  * Minimal concrete subclass for testing SubscriptionToolBackend's non-virtual logic.
@@ -39,6 +40,7 @@ public:
     using SubscriptionToolBackend::setSecondaryPeriodStart;
     using SubscriptionToolBackend::calculatePeriodEnd;
     using SubscriptionToolBackend::checkAndResetPeriod;
+    using SubscriptionToolBackend::networkManager;
 
 protected:
     UsagePeriod primaryPeriodType() const override { return FiveHour; }
@@ -68,7 +70,14 @@ private Q_SLOTS:
     void testCheckAndResetPeriod();
     void testDefaultLimitForPlan();
     void testTimeUntilResetFormat();
+    void testUsesResilientNetworkManager();
 };
+
+void SubscriptionToolBackendTest::testUsesResilientNetworkManager()
+{
+    TestToolBackend t;
+    QVERIFY(dynamic_cast<ResilientNetworkAccessManager *>(t.networkManager()) != nullptr);
+}
 
 void SubscriptionToolBackendTest::testIncrementUsage()
 {

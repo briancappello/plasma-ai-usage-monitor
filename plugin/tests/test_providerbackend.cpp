@@ -2,6 +2,7 @@
 #include <QSignalSpy>
 
 #include "providerbackend.h"
+#include "resilientnetworkaccessmanager.h"
 
 /**
  * Minimal concrete subclass for testing ProviderBackend's non-virtual logic.
@@ -37,6 +38,7 @@ public:
     using ProviderBackend::updateEstimatedCost;
     using ProviderBackend::checkBudgetLimits;
     using ProviderBackend::isRetryableStatus;
+    using ProviderBackend::networkManager;
 };
 
 class ProviderBackendTest : public QObject
@@ -65,7 +67,14 @@ private Q_SLOTS:
     void testEffectiveBaseUrl();
     void testEffectiveBaseUrlTrailingSlash();
     void testTotalTokens();
+    void testUsesResilientNetworkManager();
 };
+
+void ProviderBackendTest::testUsesResilientNetworkManager()
+{
+    TestProvider p;
+    QVERIFY(dynamic_cast<ResilientNetworkAccessManager *>(p.networkManager()) != nullptr);
+}
 
 void ProviderBackendTest::testBudgetWarningSignal()
 {

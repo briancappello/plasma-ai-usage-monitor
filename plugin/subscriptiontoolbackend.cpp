@@ -2,7 +2,7 @@
 #include <QDate>
 #include <QDebug>
 #include <QTimeZone>
-#include <QNetworkAccessManager>
+#include "resilientnetworkaccessmanager.h"
 
 SubscriptionToolBackend::SubscriptionToolBackend(QObject *parent)
     : QObject(parent)
@@ -390,7 +390,7 @@ void SubscriptionToolBackend::syncFromBrowser(const QString &cookieHeader, int b
 QNetworkAccessManager *SubscriptionToolBackend::networkManager()
 {
     if (m_networkManager == nullptr) {
-        m_networkManager = new QNetworkAccessManager(this);
+        m_networkManager = new ResilientNetworkAccessManager(this);
     }
     return m_networkManager;
 }

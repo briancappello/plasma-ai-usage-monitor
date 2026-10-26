@@ -1,4 +1,5 @@
 #include "providerbackend.h"
+#include "resilientnetworkaccessmanager.h"
 #include <QDate>
 #include <QUrl>
 #include <QRandomGenerator>
@@ -42,7 +43,7 @@ ProviderBackend::NormalizedUsageCost normalizeOpenAiLikeUsage(const QJsonObject 
 
 ProviderBackend::ProviderBackend(QObject *parent)
     : QObject(parent)
-    , m_networkManager(new QNetworkAccessManager(this))
+    , m_networkManager(new ResilientNetworkAccessManager(this))
 {
 }
 

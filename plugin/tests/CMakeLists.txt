@@ -132,6 +132,21 @@ target_link_libraries(test_subscriptiontoolbackend
 
 add_test(NAME subscriptiontoolbackend COMMAND test_subscriptiontoolbackend)
 
+# --- ResilientNetworkAccessManager regression test ---
+add_executable(test_resilientnetworkaccessmanager
+    test_resilientnetworkaccessmanager.cpp
+)
+
+target_include_directories(test_resilientnetworkaccessmanager
+    PRIVATE ${CMAKE_SOURCE_DIR}/plugin
+)
+
+target_link_libraries(test_resilientnetworkaccessmanager
+    PRIVATE Qt6::Core Qt6::Test Qt6::Network
+)
+
+add_test(NAME resilientnetworkaccessmanager COMMAND test_resilientnetworkaccessmanager)
+
 
 # --- UsageDatabase extended test ---
 add_executable(test_usagedatabase_extended
