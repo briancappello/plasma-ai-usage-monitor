@@ -16,6 +16,7 @@ Item {
         property QtObject configuration: QtObject {
             property string compactDisplayMode: "chart"
             property int chartToolIndex: 0
+            property string chartQuotaWindow: "weekly"
             property int warningThreshold: 80
             property int criticalThreshold: 95
         }
@@ -82,11 +83,17 @@ Item {
             monitor.secondaryPercentUsed = 96;
             compare(compact.hasCritical, true);
 
-            // Claude still displays its primary session, not its higher weekly quota.
+            // Weekly is the default even when a session window also exists.
+            monitor.secondaryPercentUsed = 45;
             monitor.usageLimit = 100;
             monitor.sessionPercentUsed = 15;
             monitor.percentUsed = 15;
             monitor.secondsUntilReset = 2 * 3600 + 3 * 60;
+            compare(fill.pct, 0.45);
+            compare(countdown.formatCountdown(), "6d 2h");
+
+            // Opting into the session window shows the 5-hour quota instead.
+            plasmoid.configuration.chartQuotaWindow = "session";
             compare(fill.pct, 0.15);
             compare(compact.hasWarning, false);
             compare(compact.hasCritical, false);
@@ -100,6 +107,15 @@ Item {
                 compare(fill.pct, index === 1 ? 0.23 : 0);
                 compare(countdown.formatCountdown(), index === 1 ? "1h 00m" : "2h 03m");
             }
+
+            plasmoid.configuration.chartQuotaWindow = "weekly";
+            compare(fill.pct, 0.64);
+            compare(countdown.formatCountdown(), "1d 0h");
+
+            // A tool without a weekly limit falls back to its primary window.
+            secondMonitor.hasSecondaryLimit = false;
+            compare(fill.pct, 0.23);
+            compare(countdown.formatCountdown(), "1h 00m");
         }
     }
 }

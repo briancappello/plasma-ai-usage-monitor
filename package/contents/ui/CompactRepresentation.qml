@@ -174,7 +174,7 @@ MouseArea {
         }
     }
 
-    // Chart mode: primary quota, or weekly quota for plans without a primary window.
+    // Chart mode: weekly or session quota, per the chartQuotaWindow setting.
     Item {
         id: chartMode
         anchors.fill: parent
@@ -355,9 +355,12 @@ MouseArea {
         running: visible
     }
 
+    // Weekly is preferred by default; tools without a weekly limit fall back
+    // to their primary window, and tools without a primary window use weekly.
     function usesSecondaryQuota(monitor) {
-        return !!monitor && monitor.usageLimit <= 0
-            && monitor.hasSecondaryLimit && monitor.secondaryUsageLimit > 0;
+        if (!monitor || !monitor.hasSecondaryLimit || monitor.secondaryUsageLimit <= 0)
+            return false;
+        return plasmoid.configuration.chartQuotaWindow !== "session" || monitor.usageLimit <= 0;
     }
 
     function formatMetric(value) {

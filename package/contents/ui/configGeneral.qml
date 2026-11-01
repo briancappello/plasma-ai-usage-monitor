@@ -11,6 +11,7 @@ KCM.SimpleKCM {
     property alias cfg_refreshInterval: refreshSlider.value
     property string cfg_compactDisplayMode: plasmoid.configuration.compactDisplayMode
     property alias cfg_chartToolIndex: chartToolCombo.currentIndex
+    property string cfg_chartQuotaWindow: plasmoid.configuration.chartQuotaWindow
 
     property alias cfg_openaiRefreshInterval: openaiRefreshSlider.value
     property alias cfg_anthropicRefreshInterval: anthropicRefreshSlider.value
@@ -114,6 +115,26 @@ KCM.SimpleKCM {
                 model: [i18n("Claude Code"), i18n("OpenCode"), i18n("Codex CLI"), i18n("GitHub Copilot")]
                 currentIndex: plasmoid.configuration.chartToolIndex
                 QQC2.ToolTip.text: i18n("Which subscription tool to display in the panel chart")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: 500
+            }
+        }
+
+        RowLayout {
+            visible: generalPage.cfg_compactDisplayMode === "chart"
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18n("Chart window:")
+                Layout.preferredWidth: generalPage.labelWidth
+            }
+            QQC2.ComboBox {
+                id: chartWindowCombo
+                Layout.fillWidth: true
+                model: [i18n("Weekly limit"), i18n("Session (5-hour) limit")]
+                currentIndex: generalPage.cfg_chartQuotaWindow === "session" ? 1 : 0
+                onActivated: generalPage.cfg_chartQuotaWindow = currentIndex === 1 ? "session" : "weekly"
+                QQC2.ToolTip.text: i18n("Which usage window the panel chart and reset countdown track. Tools without a weekly limit always show their primary window.")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
             }

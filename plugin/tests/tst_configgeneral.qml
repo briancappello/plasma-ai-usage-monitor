@@ -12,7 +12,7 @@ Item {
         id: plasmoid
         property var metaData: ({ version: "test" })
         property var configuration: ({
-            chartToolIndex: 0, compactDisplayMode: "chart", refreshInterval: 300,
+            chartToolIndex: 0, chartQuotaWindow: "weekly", compactDisplayMode: "chart", refreshInterval: 300,
             openaiRefreshInterval: 0, anthropicRefreshInterval: 0, googleRefreshInterval: 0,
             mistralRefreshInterval: 0, deepseekRefreshInterval: 0, groqRefreshInterval: 0,
             xaiRefreshInterval: 0, googleveoRefreshInterval: 0, loofiRefreshInterval: 0
@@ -36,16 +36,20 @@ Item {
             page = component.createObject(root);
             compare(page.cfg_chartToolIndex, 0);
             page.cfg_chartToolIndex = 1;
+            compare(page.cfg_chartQuotaWindow, "weekly");
+            page.cfg_chartQuotaWindow = "session";
             // Plasma's Apply/OK handler copies cfg_* values into configuration.
             Object.keys(plasmoid.configuration).forEach(key => {
                 const cfgKey = "cfg_" + key;
                 if (cfgKey in page) plasmoid.configuration[key] = page[cfgKey];
             });
             compare(plasmoid.configuration.chartToolIndex, 1);
+            compare(plasmoid.configuration.chartQuotaWindow, "session");
             page.destroy();
             wait(0);
             page = component.createObject(root);
             compare(page.cfg_chartToolIndex, 1);
+            compare(page.cfg_chartQuotaWindow, "session");
             page.destroy();
         }
     }

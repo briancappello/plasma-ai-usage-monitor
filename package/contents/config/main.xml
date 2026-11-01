@@ -18,6 +18,10 @@
             <default>1</default>
             <label>Which subscription tool to display in panel chart mode (index into allSubscriptionTools)</label>
         </entry>
+        <entry name="chartQuotaWindow" type="String">
+            <default>weekly</default>
+            <label>Which quota window the panel chart shows: weekly or session</label>
+        </entry>
         <entry name="setupWizardCompleted" type="Bool">
             <default>false</default>
             <label>Whether the first-run setup wizard has been completed</label>
