@@ -169,6 +169,7 @@ add_test(NAME version_consistency COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_vers
 add_test(NAME no_hardcoded_versions COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_no_hardcoded_versions.sh)
 add_test(NAME plasma_reload COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_reload_plasma.sh)
 add_test(NAME staged_settings COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/check_staged_settings.sh)
+add_test(NAME panel_defaults COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/check_panel_defaults.sh)
 
 # --- Browser cookie extraction regression test ---
 add_executable(test_browsercookieextractor

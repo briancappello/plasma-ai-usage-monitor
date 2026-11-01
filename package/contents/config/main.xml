@@ -15,7 +15,7 @@
             <label>What to show in compact mode: icon, cost, count, chart</label>
         </entry>
         <entry name="chartToolIndex" type="Int">
-            <default>1</default>
+            <default>0</default>
             <label>Which subscription tool to display in panel chart mode (index into allSubscriptionTools)</label>
         </entry>
         <entry name="chartQuotaWindow" type="String">
