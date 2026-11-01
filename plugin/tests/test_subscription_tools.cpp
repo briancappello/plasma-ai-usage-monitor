@@ -149,9 +149,9 @@ void SubscriptionToolsTest::planDefaults()
     // Claude's usage API is percentage-based: every plan's limit is the 0–100
     // percent scale (the backend normalises utilization to the real plan).
     QCOMPARE(claude.defaultLimitForPlan(QStringLiteral("Pro")), 100);
-    QCOMPARE(claude.defaultLimitForPlan(QStringLiteral("Max 20x")), 100);
+    QCOMPARE(claude.defaultLimitForPlan(QStringLiteral("Ultra")), 100);
     QCOMPARE(claude.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 100);
-    QCOMPARE(claude.defaultCostForPlan(QStringLiteral("Max 20x")), 200.0);
+    QCOMPARE(claude.defaultCostForPlan(QStringLiteral("Ultra")), 200.0);
 
     CodexCliMonitor codex;
     QCOMPARE(codex.defaultLimitForPlan(QStringLiteral("Plus")), 45);
@@ -170,7 +170,7 @@ void SubscriptionToolsTest::openCodePlanDefaults()
     // Shares Claude's percentage-based usage API → 0–100 percent scale.
     QCOMPARE(opencode.defaultLimitForPlan(QStringLiteral("Pro")), 100);
     QCOMPARE(opencode.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 100);
-    QCOMPARE(opencode.defaultCostForPlan(QStringLiteral("Max 20x")), 200.0);
+    QCOMPARE(opencode.defaultCostForPlan(QStringLiteral("Ultra")), 200.0);
     QCOMPARE(opencode.toolName(), QStringLiteral("OpenCode"));
     QVERIFY(opencode.hasSecondaryLimit());
     QVERIFY(opencode.hasSubscriptionCost());
@@ -393,7 +393,7 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
 
     // Plan auto-detected from the Claude Max org's rate_limit_tier
     // ("default_claude_max_20x"), even though it has no subscription object.
-    QCOMPARE(claude.planTier(), QStringLiteral("Max 20x"));
+    QCOMPARE(claude.planTier(), QStringLiteral("Ultra"));
 
     // Percentage-native: limits are the 0–100 scale, counts equal the percent.
     QCOMPARE(claude.usageLimit(), 100);

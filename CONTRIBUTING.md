@@ -100,7 +100,7 @@ ctest --test-dir build --output-on-failure
 | `ClipboardHelper` | `plugin/clipboardhelper.h` | Clipboard copy/paste helper for data export |
 | `UsageDatabase` | `plugin/usagedatabase.{h,cpp}` | SQLite persistence for usage history and subscription tool snapshots |
 | `SubscriptionToolBackend` | `plugin/subscriptiontoolbackend.{h,cpp}` | Abstract base for subscription tool monitors (rolling time windows, dual limits, limit warnings) |
-| `ClaudeCodeMonitor` | `plugin/claudecodemonitor.{h,cpp}` | Claude Code CLI usage monitor (filesystem watching, Pro/Max5x/Max20x plans) |
+| `ClaudeCodeMonitor` | `plugin/claudecodemonitor.{h,cpp}` | Claude Code CLI usage monitor (filesystem watching, Pro/Max5x/Ultra plans) |
 | `CodexCliMonitor` | `plugin/codexclimonitor.{h,cpp}` | OpenAI Codex CLI usage monitor (filesystem watching, Plus/Pro/Business plans) |
 | `CopilotMonitor` | `plugin/copilotmonitor.{h,cpp}` | GitHub Copilot usage monitor (monthly limits, optional GitHub API org metrics) |
 | `BrowserCookieExtractor` | `plugin/browsercookieextractor.{h,cpp}` | Reads Firefox session cookies for browser sync (read-only, short-lived cache, restrictive temp file permissions) |

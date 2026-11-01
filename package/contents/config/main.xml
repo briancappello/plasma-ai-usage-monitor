@@ -101,7 +101,7 @@
         </entry>
         <entry name="claudeCodePlan" type="Int">
             <default>0</default>
-            <label>Plan index: 0=Pro, 1=Max 5x, 2=Max 20x</label>
+            <label>Plan index: 0=Pro, 1=Max 5x, 2=Ultra (formerly Max 20x)</label>
         </entry>
         <entry name="claudeCodeCustomLimit" type="Int">
             <default>0</default>
@@ -117,7 +117,7 @@
         </entry>
         <entry name="openCodePlan" type="Int">
             <default>2</default>
-            <label>Plan index: 0=Pro, 1=Max 5x, 2=Max 20x</label>
+            <label>Plan index: 0=Pro, 1=Max 5x, 2=Ultra (formerly Max 20x)</label>
         </entry>
         <entry name="openCodeCustomLimit" type="Int">
             <default>0</default>

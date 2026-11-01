@@ -184,7 +184,7 @@ QStringList OpenCodeMonitor::availablePlans() const
     return {
         QStringLiteral("Pro"),
         QStringLiteral("Max 5x"),
-        QStringLiteral("Max 20x")
+        QStringLiteral("Ultra")
     };
 }
 
@@ -212,7 +212,7 @@ double OpenCodeMonitor::defaultCostForPlan(const QString &plan) const
 {
     if (plan == QStringLiteral("Pro")) return 20.0;
     if (plan == QStringLiteral("Max 5x")) return 100.0;
-    if (plan == QStringLiteral("Max 20x")) return 200.0;
+    if (plan == QStringLiteral("Ultra")) return 200.0;
     return 20.0;
 }
 
@@ -359,10 +359,11 @@ void OpenCodeMonitor::fetchAccountInfo(const QString &cookieHeader)
         }
 
         QString detectedPlan;
-        if (planType.contains(QStringLiteral("max_20x"), Qt::CaseInsensitive)
+        if (planType.contains(QStringLiteral("ultra"), Qt::CaseInsensitive)
+            || planType.contains(QStringLiteral("max_20x"), Qt::CaseInsensitive)
             || planType.contains(QStringLiteral("max20x"), Qt::CaseInsensitive)
             || planType == QStringLiteral("scale_max_20x")) {
-            detectedPlan = QStringLiteral("Max 20x");
+            detectedPlan = QStringLiteral("Ultra");
         } else if (planType.contains(QStringLiteral("max_5x"), Qt::CaseInsensitive)
                    || planType.contains(QStringLiteral("max5x"), Qt::CaseInsensitive)
                    || planType == QStringLiteral("scale_max_5x")) {

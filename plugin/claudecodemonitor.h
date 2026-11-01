@@ -21,7 +21,7 @@
  * Plans and approximate limits (messages vary by complexity):
  * - Pro ($20/mo):    ~45 messages/5h session, ~225/week
  * - Max 5x ($100/mo): ~225 messages/5h session, ~1125/week
- * - Max 20x ($200/mo): ~900 messages/5h session, ~4500/week
+ * - Ultra ($200/mo, formerly Max 20x): no 5h cap for verified accounts, weekly limit only
  */
 class ClaudeCodeMonitor : public SubscriptionToolBackend
 {
