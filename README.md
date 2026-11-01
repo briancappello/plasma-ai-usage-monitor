@@ -178,19 +178,15 @@ sudo dnf install just   # Fedora
 | `just versions`           | Show repo / user-local / system installed versions             |
 | `just clean`              | Remove the `build/` directory                                  |
 | **System-wide (sudo)**    |                                                                |
-| `just install`            | Build then `sudo cmake --install build`                        |
+| `just install`            | Build, `sudo cmake --install build`, remove user-local copies  |
 | `just reinstall`          | Uninstall + install                                            |
 | `just uninstall`          | Remove via `build/install_manifest.txt`                        |
-| **User-local (no sudo)**  |                                                                |
-| `just dev`                | Install user-local QML + reload plasmashell (fastest dev loop) |
-| `just install-user`       | `kpackagetool6 --upgrade package/`                             |
-| `just uninstall-user`     | Remove user-local QML package                                  |
+| `just dev`                | `just install` + `just reload` (the dev loop)                  |
 | `just reload`             | Restart plasmashell                                            |
 | **Bootstrap**             |                                                                |
 | `just bootstrap`          | Guided install (auto picks COPR on Fedora)                     |
 | `just bootstrap-source`   | Guided source install with dependency auto-fix                 |
 | `just bootstrap-copr`     | Guided Fedora COPR install                                     |
-| `just bootstrap-user`     | Guided user-local install + reload                             |
 | **COPR / DNF**            |                                                                |
 | `just copr-install`       | Enable COPR + `dnf install`                                    |
 | `just copr-update`        | `dnf upgrade` from COPR                                        |
@@ -198,20 +194,16 @@ sudo dnf install just   # Fedora
 | **Version**               |                                                                |
 | `just bump VERSION=3.8.1` | Bump version in all 4 files atomically                         |
 
-**Typical dev loop (QML changes):**
+**Typical dev loop (QML or C++ changes):**
 
 ```bash
-# Edit package/contents/ui/*.qml, then:
-just dev
+# Edit package/contents/ui/*.qml or plugin/*.cpp, then:
+just dev   # sudo required; rebuilds, installs to /usr, restarts plasmashell
 ```
 
-**Typical dev loop (C++ plugin changes):**
-
-```bash
-# Edit plugin/*.cpp, then:
-just install   # sudo required; rebuilds and installs to /usr
-just reload
-```
+There is one install path: the system install. The QML package imports the
+C++ plugin, so a QML-only copy in `~/.local/share/plasma/plasmoids/` cannot work
+on its own, and it shadows the system install. `just install` removes it.
 
 **Release a new version:**
 
@@ -242,9 +234,6 @@ Useful modes:
 ```bash
 # Force source build/install
 ./scripts/install_bootstrap.sh --method source --install-missing
-
-# Force user-local plasmoid-only install (no system plugin install)
-./scripts/install_bootstrap.sh --method user
 ```
 
 Run only dependency checks:
@@ -321,17 +310,15 @@ plasmashell --replace &
 
 ### Fix "still shows old version" (for example `v1.0`)
 
-If Plasma still shows an older widget build, verify what is installed and
-override it with a local user install:
+If Plasma still shows an older widget build, a user-local copy in
+`~/.local/share/plasma/plasmoids/` is probably shadowing the system install in
+`/usr/share/plasma/plasmoids/`. Check, remove it, and restart Plasma:
 
 ```bash
 ./scripts/show_installed_versions.sh
-./scripts/install_local_plasmoid.sh
+./scripts/remove_user_local_plasmoid.sh
 ./scripts/reload_plasma.sh
 ```
-
-The local install at `~/.local/share/plasma/plasmoids/` takes precedence over
-system package files in `/usr/share/plasma/plasmoids/`.
 
 ### Run Tests
 

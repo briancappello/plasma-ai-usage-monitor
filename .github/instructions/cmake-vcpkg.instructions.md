@@ -16,5 +16,5 @@ applyTo: '**/*.cmake, **/CMakeLists.txt, **/*.cpp, **/*.h, **/*.hpp'
 - Preserve `plasma_install_package(package com.github.loofi.aiusagemonitor)` and the `notifyrc` / AppStream install rules unless the change explicitly targets packaging behavior.
 - Use modern target-based CMake APIs when adding new plugin code or tests.
 - When changing install paths, respect `KDEInstallDirs` and the existing KF6 install destinations rather than hardcoding paths.
-- For QML-only work, prefer the user-local plasmoid loop (`just dev`) instead of suggesting full system installs.
+- `just dev` (system install + reload) is the only install path for QML and C++ work; never suggest a user-local plasmoid install, because it shadows the system install.
 - For C++ plugin changes, note that the repo builds the plugin from `plugin/` and installs the plasmoid package from `package/`; both surfaces may need verification.

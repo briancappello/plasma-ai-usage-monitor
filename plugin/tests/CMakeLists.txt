@@ -170,6 +170,7 @@ add_test(NAME no_hardcoded_versions COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_no
 add_test(NAME plasma_reload COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_reload_plasma.sh)
 add_test(NAME staged_settings COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/check_staged_settings.sh)
 add_test(NAME panel_defaults COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/check_panel_defaults.sh)
+add_test(NAME remove_user_plasmoid COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_remove_user_local_plasmoid.sh)
 
 # --- Browser cookie extraction regression test ---
 add_executable(test_browsercookieextractor

@@ -60,16 +60,7 @@ By default the mock server listens on `http://127.0.0.1:8787` and serves the `sc
 
 ## Install the widget inside the VM
 
-For a first full install in the guest, prefer the compiled-plugin path:
-
-```bash
-just build-debug
-sudo cmake --install build
-just install-user
-just reload
-```
-
-For later QML-only iterations, you can usually use:
+Install in the guest, and again after each change:
 
 ```bash
 just dev

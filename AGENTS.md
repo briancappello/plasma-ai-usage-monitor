@@ -10,7 +10,7 @@
 just build
 just build-debug
 just test
-just dev           # QML-only dev loop
+just dev           # rebuild + install to /usr + reload (the only install path)
 
 # Build
 cmake -B build && cmake --build build
@@ -18,15 +18,12 @@ cmake -B build && cmake --build build
 # Test
 cmake --build build --target test
 
-# Install locally
-cmake --install build --prefix ~/.local
-
 # Clean rebuild
 rm -rf build && cmake -B build && cmake --build build
 ```
 
 - Use the plain CMake commands above for direct builds.
-- Use `just dev` for QML-only changes and `just install` / `just reload` when C++ plugin code changes.
+- Use `just dev` to install and test any QML or C++ change. Never install to `~/.local`: a user-local copy shadows the system install.
 - This repo currently uses plain CMake + ECM/KDEInstallDirs; do not assume `vcpkg.json` or `CMakePresets.json` exist.
 
 ## Project Layout

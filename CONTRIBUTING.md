@@ -35,10 +35,10 @@ sudo cmake --install build
 
 # Or run guided bootstrap + dependency checks
 ./scripts/install_bootstrap.sh --method source --install-missing
-
-# Or upgrade the plasmoid only in your user profile (no sudo)
-./scripts/install_local_plasmoid.sh
 ```
+
+The system install is the only supported install path. A user-local copy in
+`~/.local/share/plasma/plasmoids/` shadows it; `just install` removes it.
 
 ### Testing Changes
 

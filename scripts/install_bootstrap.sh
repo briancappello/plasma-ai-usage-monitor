@@ -13,10 +13,10 @@ usage() {
 install_bootstrap.sh - guided installation helper for Plasma AI Usage Monitor
 
 Usage:
-  scripts/install_bootstrap.sh [--method auto|copr|source|user] [--yes] [--dry-run] [--install-missing]
+  scripts/install_bootstrap.sh [--method auto|copr|source] [--yes] [--dry-run] [--install-missing]
 
 Options:
-  --method <mode>     auto (default), copr, source, or user.
+  --method <mode>     auto (default), copr, or source.
   --yes               Skip interactive confirmation prompts.
   --dry-run           Print commands without executing.
   --install-missing   For source installs on Fedora, install missing deps via doctor.
@@ -107,6 +107,7 @@ case "$METHOD" in
     confirm_or_exit "Install from COPR (system-wide, requires sudo)?"
     run_cmd sudo dnf copr enable loofitheboss/plasma-ai-usage-monitor
     run_cmd sudo dnf install -y plasma-ai-usage-monitor
+    run_cmd bash "$ROOT_DIR/scripts/remove_user_local_plasmoid.sh"
     ;;
 
   source)
@@ -126,29 +127,7 @@ case "$METHOD" in
     fi
     run_cmd cmake --build "$ROOT_DIR/build" --parallel "$jobs"
     run_cmd sudo cmake --install "$ROOT_DIR/build"
-
-    # Check for stale user-local copy that would shadow system install
-    USER_META="${HOME}/.local/share/plasma/plasmoids/com.github.loofi.aiusagemonitor/metadata.json"
-    SYS_META="/usr/share/plasma/plasmoids/com.github.loofi.aiusagemonitor/metadata.json"
-    if [[ -f "$USER_META" ]]; then
-      user_ver=$(sed -n 's/.*"Version": "\([0-9.]*\)".*/\1/p' "$USER_META" | head -1)
-      sys_ver=$(sed -n 's/.*"Version": "\([0-9.]*\)".*/\1/p' "$SYS_META" 2>/dev/null | head -1 || echo "unknown")
-      if [[ -n "$user_ver" && "$user_ver" != "$sys_ver" ]]; then
-        echo
-        echo "WARNING: Stale user-local version detected!"
-        echo "  User-local: $user_ver  (~/.local/share/plasma/plasmoids/...)"
-        echo "  System:     $sys_ver   (/usr/share/plasma/plasmoids/...)"
-        echo "  The user-local copy shadows the system install."
-        echo "  Fix: kpackagetool6 --type Plasma/Applet --remove com.github.loofi.aiusagemonitor"
-        echo "  Or:  just uninstall-user"
-      fi
-    fi
-    ;;
-
-  user)
-    confirm_or_exit "Install user-local plasmoid only (no C++ plugin install)?"
-    run_cmd bash "$ROOT_DIR/scripts/install_local_plasmoid.sh"
-    run_cmd bash "$ROOT_DIR/scripts/reload_plasma.sh"
+    run_cmd bash "$ROOT_DIR/scripts/remove_user_local_plasmoid.sh"
     ;;
 
   *)

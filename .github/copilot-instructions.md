@@ -11,10 +11,10 @@ Tech stack: QML/C++ + KDE Plasma 6
 
 ## Commands
 
-- Preferred dev loop: `just dev` for QML-only changes
+- Dev loop: `just dev` (rebuild, install to /usr, reload) for QML and C++ changes
 - Build: `cmake -B build && cmake --build build`
 - Test: `cmake --build build --target test`
-- Use `just install` / `just reload` when C++ plugin changes must be installed into Plasma
+- Never install to `~/.local`: a user-local copy shadows the system install
 
 ## Architecture
 

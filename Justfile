@@ -45,9 +45,10 @@ clean:
 
 # ── System-Wide Install (requires sudo) ───────────────────────────────────────
 
-# Build then install to /usr (requires sudo)
+# Build, install to /usr (sudo), and remove any shadowing user-local copy
 install: build
     sudo cmake --install build
+    bash scripts/remove_user_local_plasmoid.sh
 
 # Reinstall: uninstall then install
 reinstall: uninstall install
@@ -70,22 +71,12 @@ uninstall:
 uninstall-guided:
     bash uninstall.sh
 
-# ── User-Local Install (no sudo, QML package only) ───────────────────────────
-
-# Install QML package to ~/.local/share/plasma/plasmoids/ (no sudo needed)
-install-user:
-    bash scripts/install_local_plasmoid.sh
-
-# Uninstall the user-local QML package
-uninstall-user:
-    kpackagetool6 --type Plasma/Applet --remove com.github.loofi.aiusagemonitor
-
-# Restart plasmashell to pick up QML changes
+# Restart plasmashell to pick up changes
 reload:
     bash scripts/reload_plasma.sh
 
-# One-step dev iteration: install user-local package + reload plasmashell
-dev: install-user reload
+# One-step dev iteration: rebuild, install to /usr, restart plasmashell
+dev: install reload
 
 # Guided bootstrap installer (auto picks COPR on Fedora, source elsewhere)
 bootstrap:
@@ -98,10 +89,6 @@ bootstrap-source:
 # Guided COPR installation on Fedora
 bootstrap-copr:
     bash scripts/install_bootstrap.sh --method copr
-
-# User-local plasmoid-only install + reload (no system plugin install)
-bootstrap-user:
-    bash scripts/install_bootstrap.sh --method user
 
 # ── COPR / DNF ────────────────────────────────────────────────────────────────
 
