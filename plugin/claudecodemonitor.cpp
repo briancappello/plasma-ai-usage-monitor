@@ -435,7 +435,8 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
         QJsonObject root = doc.object();
 
         // Validate expected fields exist
-        if (!root.contains(QStringLiteral("five_hour")) && !root.contains(QStringLiteral("seven_day"))) {
+        if (!root.contains(QStringLiteral("five_hour")) && !root.contains(QStringLiteral("seven_day"))
+            && !root.contains(QStringLiteral("limits"))) {
             setSyncing(false);
             setSyncStatus(i18n("Invalid response"));
             const QString message = i18n("API response format may have changed — no usage data found");
@@ -453,6 +454,7 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
         // fall back to the flat five_hour / seven_day objects.
         double sessionPct = -1.0;
         double weeklyPct = -1.0;
+        QString weeklyAllResetsAt;
         QVariantList scoped; // per-model weekly limits (e.g. "Fable")
         const QJsonArray limits = root.value(QStringLiteral("limits")).toArray();
         for (const QJsonValue &v : limits) {
@@ -464,6 +466,7 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
             } else if (kind == QStringLiteral("weekly_all")) {
                 // The overall weekly bucket, matching the "All models" row.
                 weeklyPct = pct;
+                weeklyAllResetsAt = l.value(QStringLiteral("resets_at")).toString();
             } else if (kind == QStringLiteral("weekly_scoped")) {
                 const QString modelName = l.value(QStringLiteral("scope")).toObject()
                                            .value(QStringLiteral("model")).toObject()
@@ -512,7 +515,10 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
             // Anchor the weekly reset to the API value. secondaryPeriodEnd is
             // computed as secondaryPeriodStart + 7 days, so back it out from the
             // real reset time instead of the widget's start time.
-            const QString weeklyResetsAt = sevenDay.value(QStringLiteral("resets_at")).toString();
+            QString weeklyResetsAt = sevenDay.value(QStringLiteral("resets_at")).toString();
+            if (weeklyResetsAt.isEmpty()) {
+                weeklyResetsAt = weeklyAllResetsAt;
+            }
             if (!weeklyResetsAt.isEmpty()) {
                 QDateTime weeklyReset = QDateTime::fromString(weeklyResetsAt, Qt::ISODate);
                 if (weeklyReset.isValid()) {

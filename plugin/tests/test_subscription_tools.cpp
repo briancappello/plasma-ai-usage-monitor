@@ -35,6 +35,7 @@ public:
         "code_review_rate_limit":{"primary_window":{"used_percent":8,"reset_at":2000604800}},
         "credits":{"has_credits":true,"unlimited":false,"balance":"42"}})";
     int codexStatus = 200;
+    QByteArray claudeUsageBody; // empty = default real-shaped payload below
     QList<QByteArray> requests;
 
 private Q_SLOTS:
@@ -65,6 +66,8 @@ private Q_SLOTS:
                 // Selecting the API org must never happen; if it does, 403.
                 status = 403;
                 body = R"({"type":"error","error":{"type":"permission_error"}})";
+            } else if (firstLine.contains("/usage") && !claudeUsageBody.isEmpty()) {
+                body = claudeUsageBody;
             } else if (firstLine.contains("/usage")) {
                 // Real-shaped percentage response (see claudecodemonitor.cpp).
                 body = R"({"five_hour":{"utilization":4.0,"resets_at":"2099-01-01T00:00:00Z"},)"
@@ -132,6 +135,7 @@ private Q_SLOTS:
     void browserSyncEmptyCookieDiagnostics();
     void browserSyncUnsupportedBrowserDiagnostics();
     void claudeSyncParsesPercentageUsage();
+    void claudeSyncWeeklyOnlyLimits();
     void codexSyncParsesWeeklyUsage();
     void codexSyncRejectsInvalidResponses_data();
     void codexSyncRejectsInvalidResponses();
@@ -412,6 +416,30 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     const QVariantMap fable = scoped.first().toMap();
     QCOMPARE(fable.value(QStringLiteral("name")).toString(), QStringLiteral("Fable"));
     QCOMPARE(fable.value(QStringLiteral("percent")).toInt(), 1);
+}
+
+// Plans without a 5-hour cap may report only the `limits` array. The weekly
+// usage and its reset must still come through from weekly_all.
+void SubscriptionToolsTest::claudeSyncWeeklyOnlyLimits()
+{
+    MockClaudeServer server;
+    server.claudeUsageBody = R"({"limits":[{"kind":"weekly_all","group":"weekly","percent":42,)"
+                             R"("resets_at":"2099-02-03T00:00:00Z","is_active":true}]})";
+    QVERIFY2(server.listen(), "port 8080 must be free for this test");
+
+    EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
+    qputenv("PLASMA_AI_MONITOR_DEMO", "1");
+
+    ClaudeCodeMonitor claude;
+    QSignalSpy completedSpy(&claude, &SubscriptionToolBackend::syncCompleted);
+    claude.syncFromBrowser(QStringLiteral("sessionKey=test"), 0);
+
+    QVERIFY(completedSpy.wait(15000));
+    QCOMPARE(completedSpy.takeFirst().at(0).toBool(), true);
+    QCOMPARE(claude.secondaryUsageCount(), 42);
+    QCOMPARE(claude.hasSessionInfo(), false);
+    QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
+             QDateTime::fromString(QStringLiteral("2099-02-03T00:00:00Z"), Qt::ISODate).toUTC());
 }
 
 void SubscriptionToolsTest::codexSyncParsesWeeklyUsage()
