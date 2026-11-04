@@ -1,6 +1,6 @@
 # Justfile — Plasma AI Usage Monitor
 # Usage: just <recipe>  (requires https://github.com/casey/just)
-# Install: cargo install just  OR  sudo dnf install just
+# Install: cargo install just  OR  sudo dnf install just  OR  sudo pacman -S just
 
 # List all available recipes
 default:
@@ -10,11 +10,13 @@ default:
 
 # Configure and build (Release mode)
 build:
+    bash scripts/clear_stale_cmake_cache.sh build
     cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
     cmake --build build --parallel $(nproc)
 
 # Configure and build (Debug mode, enables unit tests)
 build-debug:
+    bash scripts/clear_stale_cmake_cache.sh build
     cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
     cmake --build build --parallel $(nproc)
 
@@ -31,7 +33,7 @@ check:
 doctor:
     bash scripts/install_doctor.sh
 
-# Validate and install missing Fedora dependencies automatically
+# Validate and install missing dependencies automatically (Fedora/Arch)
 doctor-fix:
     bash scripts/install_doctor.sh --install-missing
 
@@ -63,7 +65,7 @@ uninstall:
         echo "Uninstalled. Removed files listed in build/install_manifest.txt"
     else
         echo "No build/install_manifest.txt found."
-        echo "Run 'just install' first, or use 'just copr-remove' for COPR installs."
+        echo "Run 'just install' first so CMake records what it installs."
         exit 1
     fi
 
@@ -78,36 +80,13 @@ reload:
 # One-step dev iteration: rebuild, install to /usr, restart plasmashell
 dev: install reload
 
-# Guided bootstrap installer (auto picks COPR on Fedora, source elsewhere)
+# Guided source build/install (doctor checks, confirm, build, install to /usr)
 bootstrap:
     bash scripts/install_bootstrap.sh
 
-# Guided source build/install with dependency auto-fix on Fedora
+# Guided source build/install with dependency auto-fix on Fedora/Arch
 bootstrap-source:
-    bash scripts/install_bootstrap.sh --method source --install-missing
-
-# Guided COPR installation on Fedora
-bootstrap-copr:
-    bash scripts/install_bootstrap.sh --method copr
-
-# ── COPR / DNF ────────────────────────────────────────────────────────────────
-
-# Enable the COPR repository
-copr-enable:
-    sudo dnf copr enable loofitheboss/plasma-ai-usage-monitor
-
-# Enable COPR and install the package
-copr-install: copr-enable
-    sudo dnf install plasma-ai-usage-monitor
-
-# Upgrade the installed COPR package to the latest version
-copr-update:
-    sudo dnf upgrade plasma-ai-usage-monitor
-
-# Remove the package and the COPR repository
-copr-remove:
-    sudo dnf remove plasma-ai-usage-monitor
-    sudo dnf copr remove loofitheboss/plasma-ai-usage-monitor
+    bash scripts/install_bootstrap.sh --install-missing
 
 # ── Version Management ────────────────────────────────────────────────────────
 

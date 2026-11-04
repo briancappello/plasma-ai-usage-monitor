@@ -3,33 +3,27 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-METHOD="auto"
 ASSUME_YES=false
 DRY_RUN=false
 INSTALL_MISSING=false
 
 usage() {
   cat <<'USAGE'
-install_bootstrap.sh - guided installation helper for Plasma AI Usage Monitor
+install_bootstrap.sh - build from source and install Plasma AI Usage Monitor to /usr
 
 Usage:
-  scripts/install_bootstrap.sh [--method auto|copr|source] [--yes] [--dry-run] [--install-missing]
+  scripts/install_bootstrap.sh [--yes] [--dry-run] [--install-missing]
 
 Options:
-  --method <mode>     auto (default), copr, or source.
   --yes               Skip interactive confirmation prompts.
   --dry-run           Print commands without executing.
-  --install-missing   For source installs on Fedora, install missing deps via doctor.
+  --install-missing   On Fedora or Arch, install missing build deps via doctor.
   -h, --help          Show this help.
 USAGE
 }
 
 while (($# > 0)); do
   case "$1" in
-    --method)
-      shift
-      METHOD="${1:-}"
-      ;;
     --yes)
       ASSUME_YES=true
       ;;
@@ -52,12 +46,8 @@ while (($# > 0)); do
   shift
 done
 
-OS_ID="unknown"
-if [[ -f /etc/os-release ]]; then
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  OS_ID="${ID:-unknown}"
-fi
+# shellcheck source=distro_detect.sh
+source "$ROOT_DIR/scripts/distro_detect.sh"
 
 run_cmd() {
   if [[ "$DRY_RUN" == true ]]; then
@@ -89,53 +79,27 @@ confirm_or_exit() {
   esac
 }
 
-if [[ "$METHOD" == "auto" ]]; then
-  if [[ "$OS_ID" == "fedora" ]] && command -v dnf >/dev/null 2>&1; then
-    METHOD="copr"
-  else
-    METHOD="source"
-  fi
+echo "Detected $OS_PRETTY ($(uname -m)); building from source."
+echo
+
+if [[ "$INSTALL_MISSING" == true ]]; then
+  run_cmd bash "$ROOT_DIR/scripts/install_doctor.sh" --install-missing
+else
+  run_cmd bash "$ROOT_DIR/scripts/install_doctor.sh"
 fi
 
-case "$METHOD" in
-  copr)
-    if [[ "$OS_ID" != "fedora" ]] || ! command -v dnf >/dev/null 2>&1; then
-      echo "COPR install is only supported on Fedora with dnf."
-      exit 1
-    fi
+confirm_or_exit "Build and install from source to /usr (requires sudo)?"
+run_cmd bash "$ROOT_DIR/scripts/clear_stale_cmake_cache.sh" "$ROOT_DIR/build"
+run_cmd cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
 
-    confirm_or_exit "Install from COPR (system-wide, requires sudo)?"
-    run_cmd sudo dnf copr enable loofitheboss/plasma-ai-usage-monitor
-    run_cmd sudo dnf install -y plasma-ai-usage-monitor
-    run_cmd bash "$ROOT_DIR/scripts/remove_user_local_plasmoid.sh"
-    ;;
-
-  source)
-    if [[ "$INSTALL_MISSING" == true ]]; then
-      run_cmd bash "$ROOT_DIR/scripts/install_doctor.sh" --install-missing
-    else
-      run_cmd bash "$ROOT_DIR/scripts/install_doctor.sh"
-    fi
-
-    confirm_or_exit "Build and install from source to /usr (requires sudo)?"
-    run_cmd cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
-
-    if command -v nproc >/dev/null 2>&1; then
-      jobs="$(nproc)"
-    else
-      jobs="4"
-    fi
-    run_cmd cmake --build "$ROOT_DIR/build" --parallel "$jobs"
-    run_cmd sudo cmake --install "$ROOT_DIR/build"
-    run_cmd bash "$ROOT_DIR/scripts/remove_user_local_plasmoid.sh"
-    ;;
-
-  *)
-    echo "Invalid method: $METHOD"
-    usage
-    exit 2
-    ;;
-esac
+if command -v nproc >/dev/null 2>&1; then
+  jobs="$(nproc)"
+else
+  jobs="4"
+fi
+run_cmd cmake --build "$ROOT_DIR/build" --parallel "$jobs"
+run_cmd sudo cmake --install "$ROOT_DIR/build"
+run_cmd bash "$ROOT_DIR/scripts/remove_user_local_plasmoid.sh"
 
 echo
 echo "Install/bootstrap complete."

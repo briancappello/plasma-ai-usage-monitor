@@ -8,7 +8,7 @@ echo
 
 # Detect what's installed
 PLASMOID_ID="com.github.loofi.aiusagemonitor"
-USER_PLASMOID_DIR="${HOME}/.local/share/plasma/plasmoids/${PLASMOID_ID}"
+USER_PLASMOID_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/plasma/plasmoids/${PLASMOID_ID}"
 SYS_PLASMOID_META="/usr/share/plasma/plasmoids/${PLASMOID_ID}/metadata.json"
 SYS_MANIFEST="${ROOT_DIR}/build/install_manifest.txt"
 HAS_USER_LOCAL=false
@@ -25,10 +25,6 @@ echo "Installed copies found:"
 
 if [[ "$HAS_USER_LOCAL" == false && "$HAS_SYSTEM" == false ]]; then
   echo "  (nothing detected)"
-  echo
-  echo "If you installed via COPR/DNF, uninstall with:"
-  echo "  sudo dnf remove plasma-ai-usage-monitor"
-  echo "  sudo dnf copr remove loofitheboss/plasma-ai-usage-monitor"
   exit 0
 fi
 
@@ -60,8 +56,7 @@ if [[ "$HAS_SYSTEM" == true ]]; then
     esac
   else
     echo "System install detected but no build/install_manifest.txt found."
-    echo "If you installed via COPR: sudo dnf remove plasma-ai-usage-monitor"
-    echo "If you built from source, re-run 'just install' first, then 'just uninstall'."
+    echo "Re-run ./install.sh first (it records the installed files), then ./uninstall.sh."
   fi
 fi
 

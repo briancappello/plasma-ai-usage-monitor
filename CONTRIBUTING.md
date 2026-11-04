@@ -34,7 +34,7 @@ sudo cmake --install build
 ./install.sh
 
 # Or run guided bootstrap + dependency checks
-./scripts/install_bootstrap.sh --method source --install-missing
+./scripts/install_bootstrap.sh --install-missing
 ```
 
 The system install is the only supported install path. A user-local copy in

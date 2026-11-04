@@ -184,13 +184,8 @@ sudo dnf install just   # Fedora
 | `just dev`                | `just install` + `just reload` (the dev loop)                  |
 | `just reload`             | Restart plasmashell                                            |
 | **Bootstrap**             |                                                                |
-| `just bootstrap`          | Guided install (auto picks COPR on Fedora)                     |
-| `just bootstrap-source`   | Guided source install with dependency auto-fix                 |
-| `just bootstrap-copr`     | Guided Fedora COPR install                                     |
-| **COPR / DNF**            |                                                                |
-| `just copr-install`       | Enable COPR + `dnf install`                                    |
-| `just copr-update`        | `dnf upgrade` from COPR                                        |
-| `just copr-remove`        | Remove package + COPR repo                                     |
+| `just bootstrap`          | Guided source build/install with preflight checks              |
+| `just bootstrap-source`   | Same, plus dependency auto-fix (`dnf` / `pacman`)              |
 | **Version**               |                                                                |
 | `just bump VERSION=3.8.1` | Bump version in all 4 files atomically                         |
 
@@ -218,50 +213,14 @@ git tag v3.8.1 && git push --tags
 
 ## Installation
 
-### Guided Bootstrap (Recommended for source installs)
+The widget is always built from source and installed to `/usr`. Supported
+targets are Fedora Asahi Remix (Apple Silicon) and Arch Linux (x86_64).
 
-Use the guided bootstrap script to run preflight checks and install with the
-right method:
+### Quick Install (Fedora Asahi / Arch)
 
-```bash
-git clone https://github.com/multidraxter-bit/plasma-ai-usage-monitor.git
-cd plasma-ai-usage-monitor
-./scripts/install_bootstrap.sh
-```
-
-Useful modes:
-
-```bash
-# Force source build/install
-./scripts/install_bootstrap.sh --method source --install-missing
-```
-
-Run only dependency checks:
-
-```bash
-./scripts/install_doctor.sh
-```
-
-### Install from COPR (Recommended)
-
-```bash
-sudo dnf copr enable loofitheboss/plasma-ai-usage-monitor
-sudo dnf install plasma-ai-usage-monitor
-```
-
-This installs both the QML plasmoid package and the C++ plugin. After installation, log out and back in (or run `plasmashell --replace &`), then add the widget from "Add Widgets...".
-
-To uninstall:
-
-```bash
-sudo dnf remove plasma-ai-usage-monitor
-sudo dnf copr remove loofitheboss/plasma-ai-usage-monitor
-```
-
-### Quick Install (Fedora)
-
-The included `install.sh` script now delegates to the guided bootstrap flow
-in source mode with Fedora dependency auto-fix enabled:
+`install.sh` runs the guided bootstrap with `--install-missing --yes`: it
+installs missing build dependencies with `dnf` or `pacman`, builds, installs to
+`/usr`, and reloads plasmashell:
 
 ```bash
 git clone https://github.com/multidraxter-bit/plasma-ai-usage-monitor.git
@@ -270,14 +229,26 @@ chmod +x install.sh
 ./install.sh
 ```
 
+For a step-by-step run with confirmation prompts, or just the dependency
+checks:
+
+```bash
+./scripts/install_bootstrap.sh --install-missing
+./scripts/install_doctor.sh
+```
+
 ### Manual Build
 
 ```bash
-# Install build dependencies (Fedora)
+# Install build dependencies (Fedora Asahi)
 sudo dnf install cmake extra-cmake-modules gcc-c++ \
     qt6-qtbase qt6-qtbase-devel qt6-qtdeclarative-devel \
     libplasma-devel kf6-kwallet-devel kf6-ki18n-devel kf6-knotifications-devel \
     kf6-kcoreaddons-devel
+
+# Install build dependencies (Arch)
+sudo pacman -S --needed cmake extra-cmake-modules gcc qt6-base qt6-declarative \
+    libplasma kwallet ki18n knotifications kcoreaddons
 
 # Build
 mkdir build && cd build
