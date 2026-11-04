@@ -3,15 +3,24 @@ set -euo pipefail
 
 KDED_TIMEOUT_SECONDS=5
 
+# Arch ships qdbus6, Fedora ships qdbus-qt6.
+QDBUS=""
+for candidate in qdbus6 qdbus-qt6 qdbus; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    QDBUS="$candidate"
+    break
+  fi
+done
+
 kded_responds() {
-  timeout "$KDED_TIMEOUT_SECONDS" qdbus6 org.kde.kded6 /kded org.kde.kded6.loadedModules >/dev/null 2>&1
+  timeout "$KDED_TIMEOUT_SECONDS" "$QDBUS" org.kde.kded6 /kded org.kde.kded6.loadedModules >/dev/null 2>&1
 }
 
 # A fresh plasmashell blocks on D-Bus calls to kded6 at startup. If kded6 is
 # alive but hung, the panels never load, so recover it before the restart.
 ensure_kded_responsive() {
   command -v systemctl >/dev/null 2>&1 || return 0
-  command -v qdbus6 >/dev/null 2>&1 || return 0
+  [[ -n "$QDBUS" ]] || return 0
   [[ "$(systemctl --user show plasma-kded6.service --property=ActiveState --value 2>/dev/null)" == "active" ]] || return 0
   kded_responds && return 0
 

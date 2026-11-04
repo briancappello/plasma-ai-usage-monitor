@@ -12,7 +12,7 @@ Usage:
   scripts/install_doctor.sh [--install-missing] [--strict]
 
 Options:
-  --install-missing  On Fedora, install missing build dependencies with dnf.
+  --install-missing  On Fedora (dnf) or Arch (pacman), install missing build dependencies.
   --strict           Exit non-zero if any warning-level runtime tool is missing.
   -h, --help         Show this help.
 USAGE
@@ -39,14 +39,9 @@ while (($# > 0)); do
   shift
 done
 
-OS_ID="unknown"
-OS_PRETTY="Unknown"
-if [[ -f /etc/os-release ]]; then
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  OS_ID="${ID:-unknown}"
-  OS_PRETTY="${PRETTY_NAME:-$OS_ID}"
-fi
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=distro_detect.sh
+source "$ROOT_DIR/scripts/distro_detect.sh"
 
 check_cmd() {
   local cmd="$1"
@@ -87,19 +82,56 @@ fedora_packages=(
   kf6-kcoreaddons-devel
 )
 
-missing_fedora_packages=()
-if [[ "$OS_ID" == "fedora" ]] && command -v rpm >/dev/null 2>&1; then
-  for pkg in "${fedora_packages[@]}"; do
-    if ! rpm -q "$pkg" >/dev/null 2>&1; then
-      missing_fedora_packages+=("$pkg")
+arch_packages=(
+  cmake
+  extra-cmake-modules
+  gcc
+  qt6-base
+  qt6-declarative
+  libplasma
+  kwallet
+  ki18n
+  knotifications
+  kcoreaddons
+)
+
+packages=()
+installed_packages=()
+missing_packages=()
+install_cmd=()
+if [[ "$DISTRO_FAMILY" == "fedora" ]] && command -v rpm >/dev/null 2>&1; then
+  packages=("${fedora_packages[@]}")
+  for pkg in "${packages[@]}"; do
+    if rpm -q --whatprovides "$pkg" >/dev/null 2>&1; then
+      installed_packages+=("$pkg")
+    else
+      missing_packages+=("$pkg")
     fi
   done
+  install_cmd=(sudo dnf install -y)
+elif [[ "$DISTRO_FAMILY" == "arch" ]] && command -v pacman >/dev/null 2>&1; then
+  packages=("${arch_packages[@]}")
+  # pacman -T prints the deps that are not satisfied (honours provides).
+  mapfile -t missing_packages < <(pacman -T "${packages[@]}" || true)
+  for pkg in "${packages[@]}"; do
+    if [[ " ${missing_packages[*]} " != *" $pkg "* ]]; then
+      installed_packages+=("$pkg")
+    fi
+  done
+  install_cmd=(sudo pacman -S --needed)
 fi
 
 sqlite_driver_ok=false
-if [[ -f /usr/lib64/qt6/plugins/sqldrivers/libqsqlite.so ]] || [[ -f /usr/lib/qt6/plugins/sqldrivers/libqsqlite.so ]]; then
-  sqlite_driver_ok=true
+qt_plugin_dirs=(/usr/lib64/qt6/plugins /usr/lib/qt6/plugins)
+if command -v qtpaths6 >/dev/null 2>&1; then
+  qt_plugin_dirs=("$(qtpaths6 --query QT_INSTALL_PLUGINS 2>/dev/null)" "${qt_plugin_dirs[@]}")
 fi
+for dir in "${qt_plugin_dirs[@]}"; do
+  if [[ -n "$dir" && -f "$dir/sqldrivers/libqsqlite.so" ]]; then
+    sqlite_driver_ok=true
+    break
+  fi
+done
 
 echo "=== Plasma AI Usage Monitor - Install Doctor ==="
 echo "OS: $OS_PRETTY"
@@ -120,32 +152,35 @@ for cmd in "${warning_cmds[@]}"; do
 done
 
 echo
-if [[ "$OS_ID" == "fedora" ]] && command -v rpm >/dev/null 2>&1; then
-  echo "Fedora package checks:"
-  for pkg in "${fedora_packages[@]}"; do
-    if rpm -q "$pkg" >/dev/null 2>&1; then
+if [[ ${#packages[@]} -gt 0 ]]; then
+  echo "Build package checks ($DISTRO_FAMILY):"
+  for pkg in "${packages[@]}"; do
+    if [[ " ${installed_packages[*]} " == *" $pkg "* ]]; then
       printf '  - %-28s installed\n' "$pkg"
     else
       printf '  - %-28s missing\n' "$pkg"
     fi
   done
   echo
+else
+  echo "Build package checks: skipped (no package list for this distro)."
+  echo "  Install the Qt6, KF6 (KWallet, I18n, Notifications, CoreAddons) and libplasma"
+  echo "  development packages; CMake will report anything still missing."
+  echo
 fi
 
 echo "SQLite driver: $([[ "$sqlite_driver_ok" == true ]] && echo "ok" || echo "warning: not found")"
 
-do_install=false
-if [[ "$AUTO_INSTALL" == true ]] && [[ "$OS_ID" == "fedora" ]]; then
-  if [[ ${#missing_fedora_packages[@]} -gt 0 ]]; then
-    do_install=true
-  fi
-fi
-
-if [[ "$do_install" == true ]]; then
+installed_missing=false
+if [[ "$AUTO_INSTALL" == true ]] && [[ ${#missing_packages[@]} -gt 0 ]]; then
   echo
-  echo "Installing missing Fedora dependencies..."
-  sudo dnf install -y "${missing_fedora_packages[@]}"
-  echo "Dependency install finished. Re-run doctor to confirm."
+  echo "Installing missing dependencies..."
+  "${install_cmd[@]}" "${missing_packages[@]}"
+  installed_missing=true
+  echo "Dependency install finished."
+elif [[ "$AUTO_INSTALL" == true ]] && [[ ${#packages[@]} -eq 0 ]]; then
+  echo
+  echo "Note: --install-missing is only supported on Fedora and Arch; nothing was installed."
 fi
 
 echo
@@ -158,10 +193,11 @@ if [[ ${#missing_required[@]} -gt 0 ]]; then
   done
 fi
 
-if [[ "$OS_ID" == "fedora" ]] && [[ ${#missing_fedora_packages[@]} -gt 0 ]] && [[ "$AUTO_INSTALL" != true ]]; then
+if [[ ${#missing_packages[@]} -gt 0 ]] && [[ "$installed_missing" != true ]]; then
+  [[ "$has_blocking" == true ]] || echo "Blocking issues:"
   has_blocking=true
-  echo "  - Missing Fedora build packages. Install with:"
-  echo "    sudo dnf install ${missing_fedora_packages[*]}"
+  echo "  - Missing build packages. Install with:"
+  echo "    ${install_cmd[*]} ${missing_packages[*]}"
 fi
 
 if [[ "$sqlite_driver_ok" != true ]]; then
