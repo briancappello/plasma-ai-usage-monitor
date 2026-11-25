@@ -247,7 +247,7 @@ KCM.SimpleKCM {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
             QQC2.Label {
-                text: i18n("Usage limit (per 5h):")
+                text: i18n("Usage limit (weekly):")
                 Layout.preferredWidth: subscriptionsPage.labelWidth
                 wrapMode: Text.WordWrap
             }
@@ -277,8 +277,8 @@ KCM.SimpleKCM {
         QQC2.Label {
             visible: claudeCodeSwitch.checked
             Layout.fillWidth: true
-            text: i18n("Claude Code also has a weekly rolling limit. The secondary limit "
-                     + "is automatically calculated from the plan tier.")
+            text: i18n("Claude subscriptions have a weekly rolling limit, plus per-model "
+                     + "weekly limits (for example Fable) reported by browser sync.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             opacity: 0.6
             wrapMode: Text.WordWrap
@@ -368,7 +368,7 @@ KCM.SimpleKCM {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
             QQC2.Label {
-                text: i18n("Usage limit (per 5h):")
+                text: i18n("Usage limit (weekly):")
                 Layout.preferredWidth: subscriptionsPage.labelWidth
                 wrapMode: Text.WordWrap
             }

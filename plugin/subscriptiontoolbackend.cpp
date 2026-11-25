@@ -1,6 +1,7 @@
 #include "subscriptiontoolbackend.h"
 #include <QDate>
 #include <QDebug>
+#include <QJsonArray>
 #include <QTimeZone>
 #include "resilientnetworkaccessmanager.h"
 
@@ -287,19 +288,85 @@ QString SubscriptionToolBackend::secondaryTimeUntilReset() const
     return QStringLiteral("%1m").arg(mins);
 }
 
-// --- Session Info ---
+// --- Claude.ai usage ---
 
-double SubscriptionToolBackend::sessionPercentUsed() const { return m_sessionPercentUsed; }
-bool SubscriptionToolBackend::hasSessionInfo() const { return m_hasSessionInfo; }
-void SubscriptionToolBackend::setSessionPercentUsed(double pct)
+bool SubscriptionToolBackend::applyClaudeUsage(const QJsonObject &root)
 {
-    m_sessionPercentUsed = pct;
-    Q_EMIT usageUpdated();
-}
-void SubscriptionToolBackend::setHasSessionInfo(bool has)
-{
-    m_hasSessionInfo = has;
-    Q_EMIT usageUpdated();
+    // Claude's usage API is percentage-based: the weekly quota is reported as
+    // 0–100 utilization, with no message counts. The count-based UI is
+    // normalised to that percent scale (limit == 100, count == %).
+    //
+    // The `limits` array drives claude.ai's own UI (kinds: weekly_all /
+    // weekly_scoped). Prefer it, and fall back to the flat seven_day object.
+    // Subscriptions no longer have a 5-hour session window, so any `session`
+    // or `five_hour` data is ignored.
+    double weeklyPct = -1.0;
+    QString weeklyResetsAt;
+    QVariantList scoped;
+    const QJsonArray limits = root.value(QStringLiteral("limits")).toArray();
+    for (const QJsonValue &v : limits) {
+        const QJsonObject l = v.toObject();
+        const QString kind = l.value(QStringLiteral("kind")).toString();
+        const double pct = l.value(QStringLiteral("percent")).toDouble(0.0);
+        if (kind == QStringLiteral("weekly_all")) {
+            weeklyPct = pct;
+            weeklyResetsAt = l.value(QStringLiteral("resets_at")).toString();
+        } else if (kind == QStringLiteral("weekly_scoped")) {
+            const QString modelName = l.value(QStringLiteral("scope")).toObject()
+                                       .value(QStringLiteral("model")).toObject()
+                                       .value(QStringLiteral("display_name")).toString();
+            if (!modelName.isEmpty()) {
+                scoped.append(QVariantMap{
+                    {QStringLiteral("name"), modelName},
+                    {QStringLiteral("percent"), static_cast<int>(qRound(pct))},
+                    {QStringLiteral("resetsAt"), l.value(QStringLiteral("resets_at")).toString()},
+                });
+            }
+        }
+    }
+
+    const QJsonObject sevenDay = root.value(QStringLiteral("seven_day")).toObject();
+    if (weeklyPct < 0.0 && !sevenDay.isEmpty()) {
+        weeklyPct = sevenDay.value(QStringLiteral("utilization")).toDouble(0.0);
+    }
+    if (weeklyPct < 0.0 && scoped.isEmpty()) {
+        return false;
+    }
+
+    setScopedLimits(scoped);
+
+    if (weeklyPct >= 0.0) {
+        setUsageCount(static_cast<int>(qRound(weeklyPct)));
+
+        // Anchor the weekly reset to the API value. periodEnd is computed as
+        // periodStart + 7 days, so back it out from the real reset time.
+        const QString sevenDayResetsAt = sevenDay.value(QStringLiteral("resets_at")).toString();
+        if (!sevenDayResetsAt.isEmpty()) {
+            weeklyResetsAt = sevenDayResetsAt;
+        }
+        const QDateTime weeklyReset = QDateTime::fromString(weeklyResetsAt, Qt::ISODate);
+        if (weeklyReset.isValid()) {
+            setPeriodStart(weeklyReset.addDays(-7));
+        }
+    }
+
+    // extra_usage (metered credit spending). Real fields:
+    //   is_enabled, monthly_limit, used_credits (currency units, not cents).
+    const QJsonValue extraVal = root.value(QStringLiteral("extra_usage"));
+    if (extraVal.isObject()) {
+        const QJsonObject extra = extraVal.toObject();
+        const bool enabled = extra.value(QStringLiteral("is_enabled")).toBool(false);
+        setHasExtraUsage(enabled);
+        if (enabled) {
+            setExtraUsageSpent(extra.value(QStringLiteral("used_credits")).toDouble(0.0));
+            setExtraUsageLimit(extra.value(QStringLiteral("monthly_limit")).toDouble(0.0));
+            const QString resetsAt = extra.value(QStringLiteral("resets_at")).toString();
+            if (!resetsAt.isEmpty()) {
+                setExtraUsageResetDate(QDateTime::fromString(resetsAt, Qt::ISODate));
+            }
+        }
+    }
+    return true;
 }
 
 // --- Extra / Metered Usage ---

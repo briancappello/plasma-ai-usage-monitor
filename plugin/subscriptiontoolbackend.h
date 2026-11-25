@@ -46,7 +46,7 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(bool limitReached READ isLimitReached NOTIFY usageUpdated)
     Q_PROPERTY(QString periodLabel READ periodLabel CONSTANT)
 
-    // Secondary usage window (e.g., weekly limit alongside 5-hour session)
+    // Secondary usage window (e.g., Codex's weekly limit alongside its 5-hour window)
     Q_PROPERTY(int secondaryUsageCount READ secondaryUsageCount NOTIFY usageUpdated)
     Q_PROPERTY(int secondaryUsageLimit READ secondaryUsageLimit WRITE setSecondaryUsageLimit NOTIFY usageLimitChanged)
     Q_PROPERTY(double secondaryPercentUsed READ secondaryPercentUsed NOTIFY usageUpdated)
@@ -63,10 +63,6 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(QDateTime secondaryPeriodEnd READ secondaryPeriodEnd NOTIFY usageUpdated)
     Q_PROPERTY(int secondarySecondsUntilReset READ secondarySecondsUntilReset NOTIFY usageUpdated)
     Q_PROPERTY(QString secondaryTimeUntilReset READ secondaryTimeUntilReset NOTIFY usageUpdated)
-
-    // Session tracking (current active session percentage — from API sync)
-    Q_PROPERTY(double sessionPercentUsed READ sessionPercentUsed NOTIFY usageUpdated)
-    Q_PROPERTY(bool hasSessionInfo READ hasSessionInfo NOTIFY usageUpdated)
 
     // Extra / metered usage (e.g., Claude extra spending, Copilot metered)
     Q_PROPERTY(bool hasExtraUsage READ hasExtraUsage NOTIFY usageUpdated)
@@ -103,7 +99,7 @@ class SubscriptionToolBackend : public QObject
 
 public:
     enum UsagePeriod {
-        FiveHour,   // 5-hour rolling window (Claude Code, Codex)
+        FiveHour,   // 5-hour rolling window (Codex)
         Daily,      // 24-hour from midnight
         Weekly,     // 7-day rolling window
         Monthly     // Calendar month (resets 1st)
@@ -153,10 +149,6 @@ public:
     QDateTime secondaryPeriodEnd() const;
     int secondarySecondsUntilReset() const;
     QString secondaryTimeUntilReset() const;
-
-    // Session (from API)
-    double sessionPercentUsed() const;
-    bool hasSessionInfo() const;
 
     // Extra / metered usage
     bool hasExtraUsage() const;
@@ -232,8 +224,6 @@ protected:
     void setSyncing(bool syncing);
     void setSyncStatus(const QString &status);
     void setLastSyncTime(const QDateTime &time);
-    void setSessionPercentUsed(double pct);
-    void setHasSessionInfo(bool has);
     void setExtraUsageSpent(double spent);
     void setExtraUsageLimit(double limit);
     void setExtraUsageResetDate(const QDateTime &date);
@@ -244,6 +234,11 @@ protected:
     void setRemainingCredits(int credits);
     void setSubscriptionCostValue(double cost);
     void setScopedLimits(const QVariantList &limits);
+
+    // Applies a claude.ai /usage payload (shared by every monitor that uses a
+    // Claude subscription) to the weekly primary window. Returns false when
+    // the payload has no usage data.
+    bool applyClaudeUsage(const QJsonObject &root);
 
     // Period management
     virtual UsagePeriod primaryPeriodType() const = 0;
@@ -269,9 +264,7 @@ private:
     QDateTime m_secondaryPeriodStart;
     QDateTime m_lastActivity;
 
-    // Session & extra usage (from sync)
-    double m_sessionPercentUsed = 0.0;
-    bool m_hasSessionInfo = false;
+    // Extra usage (from sync)
     bool m_hasExtraUsage = false;
     double m_extraUsageSpent = 0.0;
     double m_extraUsageLimit = 0.0;

@@ -8,20 +8,16 @@
 /**
  * Monitor for Claude Code CLI usage.
  *
- * Claude Code (Anthropic) uses rolling time windows:
- * - Primary: 5-hour session window
- * - Secondary: Weekly rolling window (separate Opus/non-Opus limits)
+ * Claude subscriptions have a single weekly rolling quota (all models), plus
+ * optional per-model weekly quotas (e.g. "Fable") exposed as scopedLimits.
+ * There is no 5-hour session window.
  *
- * v2.3: Added browser-sync support via Claude.ai internal APIs.
- * When enabled, extracts session cookies from Firefox to call:
- * - GET /api/account → get organization UUID
- * - GET /api/organizations/{uuid}/usage → session %, weekly limits
- * - GET /api/organizations/{uuid}/settings/billing → extra usage spend
+ * Browser sync extracts session cookies from Firefox to call Claude.ai's
+ * internal APIs:
+ * - GET /api/bootstrap → organization UUID and plan
+ * - GET /api/organizations/{uuid}/usage → weekly %, per-model weekly %, extra usage
  *
- * Plans and approximate limits (messages vary by complexity):
- * - Pro ($20/mo):    ~45 messages/5h session, ~225/week
- * - Max 5x ($100/mo): ~225 messages/5h session, ~1125/week
- * - Ultra ($200/mo, formerly Max 20x): no 5h cap for verified accounts, weekly limit only
+ * Plans: Pro ($20/mo), Max 5x ($100/mo), Ultra ($200/mo, formerly Max 20x).
  */
 class ClaudeCodeMonitor : public SubscriptionToolBackend
 {
@@ -36,9 +32,7 @@ public:
     QString toolColor() const override { return QStringLiteral("#D4A574"); }
 
     // Period labels
-    QString periodLabel() const override { return QStringLiteral("5-hour session"); }
-    QString secondaryPeriodLabel() const override { return QStringLiteral("Weekly"); }
-    bool hasSecondaryLimit() const override { return true; }
+    QString periodLabel() const override { return QStringLiteral("Weekly"); }
 
     // Subscription cost
     bool hasSubscriptionCost() const override { return true; }
@@ -47,7 +41,6 @@ public:
     // Plan management
     Q_INVOKABLE QStringList availablePlans() const override;
     Q_INVOKABLE int defaultLimitForPlan(const QString &plan) const override;
-    Q_INVOKABLE int defaultSecondaryLimitForPlan(const QString &plan) const override;
     Q_INVOKABLE double defaultCostForPlan(const QString &plan) const override;
 
     // Tool detection
@@ -58,8 +51,7 @@ public:
     Q_INVOKABLE void syncFromBrowser(const QString &cookieHeader, int browserType) override;
 
 protected:
-    UsagePeriod primaryPeriodType() const override { return FiveHour; }
-    UsagePeriod secondaryPeriodType() const override { return Weekly; }
+    UsagePeriod primaryPeriodType() const override { return Weekly; }
 
 private Q_SLOTS:
     void onDirectoryChanged(const QString &path);

@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import org.kde.kirigami as Kirigami
 import "../../package/contents/ui" as Widget
 
 Item {
@@ -22,24 +23,26 @@ Item {
         }
     }
 
+    // Claude-like: one weekly window plus a per-model weekly limit.
     QtObject {
         id: monitor
         property bool installed: true
         property bool hasSubscriptionCost: false
-        property bool hasSecondaryLimit: true
-        property int usageLimit: 0
-        property int secondaryUsageLimit: 100
-        property real sessionPercentUsed: 0
-        property real percentUsed: 0
-        property real secondaryPercentUsed: 45
-        property int secondsUntilReset: 0
-        property int secondarySecondsUntilReset: 6 * 86400 + 2 * 3600
+        property bool hasSecondaryLimit: false
+        property int usageLimit: 100
+        property int secondaryUsageLimit: 0
+        property real percentUsed: 45
+        property real secondaryPercentUsed: 0
+        property var scopedLimits: [{ name: "Fable", percent: 12 }]
+        property int secondsUntilReset: 6 * 86400 + 2 * 3600
+        property int secondarySecondsUntilReset: 0
         property bool limitReached: false
         signal usageUpdated()
     }
 
     Widget.CompactRepresentation { id: compact; anchors.fill: parent }
 
+    // Codex-like: 5-hour primary window plus weekly, no per-model limits.
     QtObject {
         id: secondMonitor
         property bool installed: true
@@ -47,9 +50,9 @@ Item {
         property bool hasSecondaryLimit: true
         property int usageLimit: 100
         property int secondaryUsageLimit: 100
-        property real sessionPercentUsed: 23
         property real percentUsed: 23
         property real secondaryPercentUsed: 64
+        property var scopedLimits: []
         property int secondsUntilReset: 3600
         property int secondarySecondsUntilReset: 86400
         property bool limitReached: false
@@ -60,62 +63,65 @@ Item {
         name: "CompactSubscriptionChart"
         when: windowShown
 
-        // Locate the existing chart objects by their exposed QML properties.
-        function descendant(item, property) {
-            if (item[property] !== undefined) return item;
+        function descendant(item, predicate) {
+            if (predicate(item)) return item;
             for (var i = 0; i < item.children.length; ++i) {
-                var found = descendant(item.children[i], property);
+                var found = descendant(item.children[i], predicate);
                 if (found) return found;
             }
             return null;
         }
+        function named(name) { return descendant(compact, function(i) { return i.objectName === name; }); }
 
-        function test_quotaSelection() {
-            var fill = descendant(compact, "pct");
-            var countdown = descendant(compact, "formatCountdown");
-            verify(fill !== null);
+        function test_stackedWeeklyAndScopedBars() {
+            var quota = named("quotaBar");
+            var scoped = named("scopedBar");
+            var countdown = descendant(compact, function(i) { return i.formatCountdown !== undefined; });
+            verify(quota !== null);
+            verify(scoped !== null);
             verify(countdown !== null);
-            compare(fill.pct, 0.45);
+
+            // Weekly on top, Fable stacked below it, both visible.
+            compare(quota.pct, 0.45);
+            compare(scoped.pct, 0.12);
+            verify(scoped.visible);
+            verify(scoped.y > quota.y);
+            verify(quota.height > 0 && scoped.height > 0);
             compare(countdown.formatCountdown(), "6d 2h");
-            monitor.secondaryPercentUsed = 81;
-            compare(fill.pct, 0.81);
+
+            // Each bar is coloured by its own percentage.
+            monitor.percentUsed = 81;
+            compare(quota.fillColor, Kirigami.Theme.neutralTextColor);
+            compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
             compare(compact.hasWarning, true);
-            monitor.secondaryPercentUsed = 96;
+            compare(compact.hasCritical, false);
+
+            // A critical per-model limit raises the panel badge on its own.
+            monitor.percentUsed = 45;
+            monitor.scopedLimits = [{ name: "Fable", percent: 97 }];
+            compare(scoped.fillColor, Kirigami.Theme.negativeTextColor);
             compare(compact.hasCritical, true);
 
-            // Weekly is the default even when a session window also exists.
-            monitor.secondaryPercentUsed = 45;
-            monitor.usageLimit = 100;
-            monitor.sessionPercentUsed = 15;
-            monitor.percentUsed = 15;
-            monitor.secondsUntilReset = 2 * 3600 + 3 * 60;
-            compare(fill.pct, 0.45);
-            compare(countdown.formatCountdown(), "6d 2h");
-
-            // Opting into the session window shows the 5-hour quota instead.
+            // The session option cannot resurrect a 5-hour view for Claude.
             plasmoid.configuration.chartQuotaWindow = "session";
-            compare(fill.pct, 0.15);
-            compare(compact.hasWarning, false);
-            compare(compact.hasCritical, false);
-            compare(countdown.formatCountdown(), "2h 03m");
-            monitor.sessionPercentUsed = 0;
-            monitor.percentUsed = 0;
-            compare(fill.pct, 0);
-
-            for (var index of [1, 0, 1, 0, 1]) {
-                plasmoid.configuration.chartToolIndex = index;
-                compare(fill.pct, index === 1 ? 0.23 : 0);
-                compare(countdown.formatCountdown(), index === 1 ? "1h 00m" : "2h 03m");
-            }
-
+            compare(quota.pct, 0.45);
+            compare(countdown.formatCountdown(), "6d 2h");
             plasmoid.configuration.chartQuotaWindow = "weekly";
-            compare(fill.pct, 0.64);
-            compare(countdown.formatCountdown(), "1d 0h");
 
-            // A tool without a weekly limit falls back to its primary window.
-            secondMonitor.hasSecondaryLimit = false;
-            compare(fill.pct, 0.23);
+            // No per-model limit: a single bar fills the space.
+            monitor.scopedLimits = [];
+            verify(!scoped.visible);
+
+            // Switching tools: Codex shows weekly by default, 5-hour on request.
+            for (var index of [1, 0, 1]) {
+                plasmoid.configuration.chartToolIndex = index;
+                compare(quota.pct, index === 1 ? 0.64 : 0.45);
+                compare(countdown.formatCountdown(), index === 1 ? "1d 0h" : "6d 2h");
+            }
+            plasmoid.configuration.chartQuotaWindow = "session";
+            compare(quota.pct, 0.23);
             compare(countdown.formatCountdown(), "1h 00m");
+            plasmoid.configuration.chartQuotaWindow = "weekly";
         }
     }
 }

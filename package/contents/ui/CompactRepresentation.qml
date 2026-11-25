@@ -59,8 +59,7 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor
-                && (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 80) return true;
+            if (t && t.enabled && t.monitor && quotaPercent(t.monitor) >= 80) return true;
         }
         return false;
     }
@@ -77,7 +76,7 @@ MouseArea {
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
             if (t && t.enabled && t.monitor && (t.monitor.limitReached
-                || (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 95)) return true;
+                || quotaPercent(t.monitor) >= 95)) return true;
         }
         return false;
     }
@@ -174,7 +173,8 @@ MouseArea {
         }
     }
 
-    // Chart mode: weekly or session quota, per the chartQuotaWindow setting.
+    // Chart mode: the tool's weekly quota (or Codex's 5-hour window, per the
+    // chartQuotaWindow setting), with any per-model weekly quota stacked below.
     Item {
         id: chartMode
         anchors.fill: parent
@@ -243,8 +243,15 @@ MouseArea {
             }
         }
 
-        // Usage bar — fills the space above the countdown label
-        Item {
+        // First per-model weekly limit (e.g. Claude's "Fable"), if the tool has one
+        readonly property var scopedLimit: {
+            var limits = ccAvailable ? (ccMonitor.scopedLimits ?? []) : [];
+            return limits.length > 0 ? limits[0] : null;
+        }
+
+        // Usage bars — stacked in the space above the countdown label:
+        // the main quota on top, the per-model weekly quota below it.
+        ColumnLayout {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
@@ -253,48 +260,66 @@ MouseArea {
             anchors.rightMargin: Kirigami.Units.smallSpacing
             anchors.topMargin: 1
             anchors.bottomMargin: 5
+            spacing: 2
 
-            // Track background
-            Rectangle {
-                anchors.fill: parent
-                radius: height / 2
-                color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
-            }
-
-            // Filled portion
-            Rectangle {
-                id: usageFill
-                readonly property double pct: chartMode.ccAvailable
-                    ? Math.min(1.0, (chartMode.useSecondary
-                        ? chartMode.ccMonitor.secondaryPercentUsed / 100.0
-                        : chartMode.ccMonitor.sessionPercentUsed > 0
-                        ? chartMode.ccMonitor.sessionPercentUsed / 100.0
-                        : chartMode.ccMonitor.percentUsed / 100.0))
+            UsageBar {
+                objectName: "quotaBar"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                pct: chartMode.ccAvailable
+                    ? (chartMode.useSecondary ? chartMode.ccMonitor.secondaryPercentUsed
+                                              : chartMode.ccMonitor.percentUsed) / 100.0
                     : 0.0
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: parent.width * pct
-                radius: height / 2
-                color: {
-                    var p = pct * 100;
-                    if (p >= plasmoid.configuration.criticalThreshold)
-                        return Kirigami.Theme.negativeTextColor;
-                    if (p >= plasmoid.configuration.warningThreshold)
-                        return Kirigami.Theme.neutralTextColor;
-                    return Kirigami.Theme.positiveTextColor;
-                }
-                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-                Behavior on color { ColorAnimation { duration: 300 } }
             }
 
-            // "not available" placeholder
-            Rectangle {
-                anchors.fill: parent
-                radius: height / 2
-                color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
-                visible: !chartMode.ccAvailable
+            UsageBar {
+                objectName: "scopedBar"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: chartMode.scopedLimit !== null
+                pct: chartMode.scopedLimit ? (chartMode.scopedLimit.percent ?? 0) / 100.0 : 0.0
             }
+        }
+    }
+
+    component UsageBar: Item {
+        id: bar
+        property double pct: 0.0
+        readonly property double fill: Math.max(0.0, Math.min(1.0, pct))
+        readonly property color fillColor: {
+            var p = pct * 100;
+            if (p >= plasmoid.configuration.criticalThreshold)
+                return Kirigami.Theme.negativeTextColor;
+            if (p >= plasmoid.configuration.warningThreshold)
+                return Kirigami.Theme.neutralTextColor;
+            return Kirigami.Theme.positiveTextColor;
+        }
+
+        // Track background
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+        }
+
+        // Filled portion
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: parent.width * bar.fill
+            radius: height / 2
+            color: bar.fillColor
+            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+            Behavior on color { ColorAnimation { duration: 300 } }
+        }
+
+        // "not available" placeholder
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
+            visible: !chartMode.ccAvailable
         }
     }
 
@@ -361,6 +386,15 @@ MouseArea {
         if (!monitor || !monitor.hasSecondaryLimit || monitor.secondaryUsageLimit <= 0)
             return false;
         return plasmoid.configuration.chartQuotaWindow !== "session" || monitor.usageLimit <= 0;
+    }
+
+    // Highest of the panel's quota and any per-model weekly quota.
+    function quotaPercent(monitor) {
+        var pct = usesSecondaryQuota(monitor) ? monitor.secondaryPercentUsed : monitor.percentUsed;
+        var scoped = monitor.scopedLimits ?? [];
+        for (var i = 0; i < scoped.length; i++)
+            pct = Math.max(pct, scoped[i].percent ?? 0);
+        return pct;
     }
 
     function formatMetric(value) {

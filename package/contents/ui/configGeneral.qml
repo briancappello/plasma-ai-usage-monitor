@@ -131,10 +131,10 @@ KCM.SimpleKCM {
             QQC2.ComboBox {
                 id: chartWindowCombo
                 Layout.fillWidth: true
-                model: [i18n("Weekly limit"), i18n("Session (5-hour) limit")]
+                model: [i18n("Weekly limit"), i18n("Codex 5-hour window")]
                 currentIndex: generalPage.cfg_chartQuotaWindow === "session" ? 1 : 0
                 onActivated: generalPage.cfg_chartQuotaWindow = currentIndex === 1 ? "session" : "weekly"
-                QQC2.ToolTip.text: i18n("Which usage window the panel chart and reset countdown track. Tools without a weekly limit always show their primary window.")
+                QQC2.ToolTip.text: i18n("Which usage window the panel chart and reset countdown track. Claude tools only have a weekly limit and always show it, with the per-model weekly limit stacked below.")
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
             }

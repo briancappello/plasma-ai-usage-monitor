@@ -66,8 +66,8 @@ In addition to API providers, the widget tracks usage limits for subscription-ba
 ### Claude Code
 
 - Monitors `~/.claude/` directory for activity via filesystem watcher
-- Plans: **Pro** (45/5h, 225/week), **Max 5x** (225/5h, 1125/week), **Ultra** (formerly Max 20x; no 5h cap for verified accounts, weekly limit only)
-- Dual limits: 5-hour session window + weekly rolling window (the panel chart shows the weekly window by default)
+- Plans: **Pro**, **Max 5x**, **Ultra** (formerly Max 20x)
+- A single weekly rolling limit, plus per-model weekly limits (for example Fable). The panel chart stacks the weekly bar above the per-model bar.
 
 ### Codex CLI
 
@@ -437,7 +437,7 @@ The QML plugin (`com.github.loofi.aiusagemonitor`) provides 20 types:
 - **`ClipboardHelper`** — Simple helper class for copying text to the system clipboard (replaces the previous TextArea workaround).
 - **`UsageDatabase`** — SQLite persistence with WAL mode, configurable retention, auto-pruning, CSV/JSON export, and aggregated provider/tool series APIs for compare analytics.
 - **`SubscriptionToolBackend`** (abstract) — Base class for subscription-based AI coding tool monitors. Tracks usage counts against fixed limits with rolling time windows (5-hour, daily, weekly, monthly). Supports dual primary/secondary periods, automatic period resets, and 80% limit warnings.
-- **`ClaudeCodeMonitor`** — Monitors Claude Code CLI usage via `QFileSystemWatcher` on `~/.claude/`. Supports Pro/Max 5x/Ultra plans with dual 5-hour session and weekly rolling windows.
+- **`ClaudeCodeMonitor`** — Monitors Claude Code CLI usage via `QFileSystemWatcher` on `~/.claude/`. Supports Pro/Max 5x/Ultra plans with a weekly rolling window and per-model weekly limits.
 - **`CodexCliMonitor`** — Monitors OpenAI Codex CLI usage via `QFileSystemWatcher` on `~/.codex/`. Supports Plus/Pro/Business plans with 5-hour rolling windows.
 - **`CopilotMonitor`** — Monitors GitHub Copilot premium request usage with monthly period (resets 1st of month UTC). Supports Free/Pro/Pro+/Business/Enterprise plans. Optionally queries GitHub REST API for organization-level Copilot billing metrics.
 

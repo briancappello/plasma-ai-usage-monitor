@@ -183,15 +183,8 @@ QStringList ClaudeCodeMonitor::availablePlans() const
 int ClaudeCodeMonitor::defaultLimitForPlan(const QString &plan) const
 {
     // Claude's usage API is percentage-based (no message counts), so the
-    // "limit" is a 0–100 percent scale for every plan; the backend already
-    // normalises utilization to the user's actual plan.
-    Q_UNUSED(plan);
-    return 100;
-}
-
-int ClaudeCodeMonitor::defaultSecondaryLimitForPlan(const QString &plan) const
-{
-    // Weekly usage is likewise reported as a 0–100 percent scale.
+    // weekly "limit" is a 0–100 percent scale for every plan; the backend
+    // already normalises utilization to the user's actual plan.
     Q_UNUSED(plan);
     return 100;
 }
@@ -380,7 +373,6 @@ void ClaudeCodeMonitor::fetchAccountInfo(const QString &cookieHeader)
             qDebug() << "ClaudeCodeMonitor: Auto-detected plan:" << detectedPlan << "(raw:" << planType << ")";
             setPlanTier(detectedPlan);
             setUsageLimit(defaultLimitForPlan(detectedPlan));
-            setSecondaryUsageLimit(defaultSecondaryLimitForPlan(detectedPlan));
         }
 
         fetchUsageData(orgUuid, cookieHeader);
@@ -435,116 +427,13 @@ void ClaudeCodeMonitor::fetchUsageData(const QString &orgUuid, const QString &co
             return;
         }
 
-        QJsonObject root = doc.object();
-
-        // Validate expected fields exist
-        if (!root.contains(QStringLiteral("five_hour")) && !root.contains(QStringLiteral("seven_day"))
-            && !root.contains(QStringLiteral("limits"))) {
+        if (!applyClaudeUsage(doc.object())) {
             setSyncing(false);
             setSyncStatus(i18n("Invalid response"));
             const QString message = i18n("API response format may have changed — no usage data found");
             Q_EMIT syncDiagnostic(toolName(), QStringLiteral("format_changed"), message);
             Q_EMIT syncCompleted(false, message);
             return;
-        }
-
-        // Claude's usage API is percentage-based: session/weekly are reported
-        // as 0–100 utilization, and there are no message counts. We normalise
-        // the count-based UI to that percent scale (limit == 100, count == %).
-        //
-        // The `limits` array is the authoritative source that drives claude.ai's
-        // own UI (kinds: session / weekly_all / weekly_scoped). Prefer it, and
-        // fall back to the flat five_hour / seven_day objects.
-        double sessionPct = -1.0;
-        double weeklyPct = -1.0;
-        QString weeklyAllResetsAt;
-        QVariantList scoped; // per-model weekly limits (e.g. "Fable")
-        const QJsonArray limits = root.value(QStringLiteral("limits")).toArray();
-        for (const QJsonValue &v : limits) {
-            const QJsonObject l = v.toObject();
-            const QString kind = l.value(QStringLiteral("kind")).toString();
-            const double pct = l.value(QStringLiteral("percent")).toDouble(0.0);
-            if (kind == QStringLiteral("session")) {
-                sessionPct = pct;
-            } else if (kind == QStringLiteral("weekly_all")) {
-                // The overall weekly bucket, matching the "All models" row.
-                weeklyPct = pct;
-                weeklyAllResetsAt = l.value(QStringLiteral("resets_at")).toString();
-            } else if (kind == QStringLiteral("weekly_scoped")) {
-                const QString modelName = l.value(QStringLiteral("scope")).toObject()
-                                           .value(QStringLiteral("model")).toObject()
-                                           .value(QStringLiteral("display_name")).toString();
-                if (!modelName.isEmpty()) {
-                    scoped.append(QVariantMap{
-                        {QStringLiteral("name"), modelName},
-                        {QStringLiteral("percent"), static_cast<int>(qRound(pct))},
-                        {QStringLiteral("resetsAt"), l.value(QStringLiteral("resets_at")).toString()},
-                    });
-                }
-            }
-        }
-        setScopedLimits(scoped);
-
-        // Parse 5-hour session usage
-        QJsonObject fiveHour = root.value(QStringLiteral("five_hour")).toObject();
-        if (sessionPct < 0.0 && !fiveHour.isEmpty()) {
-            sessionPct = fiveHour.value(QStringLiteral("utilization")).toDouble(0.0);
-        }
-        if (sessionPct >= 0.0) {
-            setSessionPercentUsed(sessionPct);
-            setHasSessionInfo(true);
-            // Count bars run on a 0–100 percent scale (see defaultLimitForPlan).
-            setUsageCount(static_cast<int>(qRound(sessionPct)));
-
-            // Update period reset time from whichever source has it.
-            QString resetsAt = fiveHour.value(QStringLiteral("resets_at")).toString();
-            if (!resetsAt.isEmpty()) {
-                QDateTime resetTime = QDateTime::fromString(resetsAt, Qt::ISODate);
-                if (resetTime.isValid()) {
-                    // Calculate period start from reset time (reset = start + 5h)
-                    setPeriodStart(resetTime.addSecs(-5 * 3600));
-                }
-            }
-        }
-
-        // Parse 7-day (weekly) usage
-        QJsonObject sevenDay = root.value(QStringLiteral("seven_day")).toObject();
-        if (weeklyPct < 0.0 && !sevenDay.isEmpty()) {
-            weeklyPct = sevenDay.value(QStringLiteral("utilization")).toDouble(0.0);
-        }
-        if (weeklyPct >= 0.0) {
-            setSecondaryUsageCount(static_cast<int>(qRound(weeklyPct)));
-
-            // Anchor the weekly reset to the API value. secondaryPeriodEnd is
-            // computed as secondaryPeriodStart + 7 days, so back it out from the
-            // real reset time instead of the widget's start time.
-            QString weeklyResetsAt = sevenDay.value(QStringLiteral("resets_at")).toString();
-            if (weeklyResetsAt.isEmpty()) {
-                weeklyResetsAt = weeklyAllResetsAt;
-            }
-            if (!weeklyResetsAt.isEmpty()) {
-                QDateTime weeklyReset = QDateTime::fromString(weeklyResetsAt, Qt::ISODate);
-                if (weeklyReset.isValid()) {
-                    setSecondaryPeriodStart(weeklyReset.addDays(-7));
-                }
-            }
-        }
-
-        // Parse extra_usage (metered credit spending). Real fields:
-        //   is_enabled, monthly_limit, used_credits (currency units, not cents).
-        QJsonValue extraVal = root.value(QStringLiteral("extra_usage"));
-        if (!extraVal.isNull() && extraVal.isObject()) {
-            QJsonObject extra = extraVal.toObject();
-            const bool enabled = extra.value(QStringLiteral("is_enabled")).toBool(false);
-            setHasExtraUsage(enabled);
-            if (enabled) {
-                setExtraUsageSpent(extra.value(QStringLiteral("used_credits")).toDouble(0.0));
-                setExtraUsageLimit(extra.value(QStringLiteral("monthly_limit")).toDouble(0.0));
-                QString resetsAt = extra.value(QStringLiteral("resets_at")).toString();
-                if (!resetsAt.isEmpty()) {
-                    setExtraUsageResetDate(QDateTime::fromString(resetsAt, Qt::ISODate));
-                }
-            }
         }
 
         // Sync complete

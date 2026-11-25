@@ -151,7 +151,10 @@ void SubscriptionToolsTest::planDefaults()
     // percent scale (the backend normalises utilization to the real plan).
     QCOMPARE(claude.defaultLimitForPlan(QStringLiteral("Pro")), 100);
     QCOMPARE(claude.defaultLimitForPlan(QStringLiteral("Ultra")), 100);
-    QCOMPARE(claude.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 100);
+    // Weekly is the only window: no 5-hour session, no secondary limit.
+    QCOMPARE(claude.periodLabel(), QStringLiteral("Weekly"));
+    QVERIFY(!claude.hasSecondaryLimit());
+    QCOMPARE(claude.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 0);
     QCOMPARE(claude.defaultCostForPlan(QStringLiteral("Ultra")), 200.0);
 
     CodexCliMonitor codex;
@@ -170,10 +173,11 @@ void SubscriptionToolsTest::openCodePlanDefaults()
     OpenCodeMonitor opencode;
     // Shares Claude's percentage-based usage API → 0–100 percent scale.
     QCOMPARE(opencode.defaultLimitForPlan(QStringLiteral("Pro")), 100);
-    QCOMPARE(opencode.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 100);
+    QCOMPARE(opencode.defaultSecondaryLimitForPlan(QStringLiteral("Max 5x")), 0);
     QCOMPARE(opencode.defaultCostForPlan(QStringLiteral("Ultra")), 200.0);
     QCOMPARE(opencode.toolName(), QStringLiteral("OpenCode"));
-    QVERIFY(opencode.hasSecondaryLimit());
+    QCOMPARE(opencode.periodLabel(), QStringLiteral("Weekly"));
+    QVERIFY(!opencode.hasSecondaryLimit());
     QVERIFY(opencode.hasSubscriptionCost());
 }
 
@@ -396,19 +400,19 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     // ("default_claude_max_20x"), even though it has no subscription object.
     QCOMPARE(claude.planTier(), QStringLiteral("Ultra"));
 
-    // Percentage-native: limits are the 0–100 scale, counts equal the percent.
+    // Percentage-native: the weekly limit is the 0–100 scale and the count
+    // equals the weekly_all percent. Legacy session data (4%) is ignored.
     QCOMPARE(claude.usageLimit(), 100);
-    QCOMPARE(claude.secondaryUsageLimit(), 100);
-    QCOMPARE(qRound(claude.sessionPercentUsed()), 4);
-    QCOMPARE(claude.usageCount(), 4);          // session 4%, NOT 4% of 900
-    QCOMPARE(claude.secondaryUsageCount(), 3); // weekly_all 3%, NOT 3% of 4500
+    QCOMPARE(claude.usageCount(), 3); // weekly_all 3%, NOT 3% of 4500
+    QCOMPARE(claude.percentUsed(), 3.0);
+    QCOMPARE(claude.secondaryUsageCount(), 0);
 
     // extra_usage is disabled in the payload → no metered row.
     QCOMPARE(claude.hasExtraUsage(), false);
 
     // Weekly reset is anchored to the API's seven_day.resets_at, not the
-    // widget start time (secondaryPeriodEnd == start + 7 days).
-    QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
+    // widget start time (periodEnd == start + 7 days).
+    QCOMPARE(claude.periodEnd().toUTC(),
              QDateTime::fromString(QStringLiteral("2099-01-07T00:00:00Z"), Qt::ISODate).toUTC());
 
     // Per-model weekly limits (weekly_scoped) are surfaced as scopedLimits.
@@ -419,28 +423,36 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     QCOMPARE(fable.value(QStringLiteral("percent")).toInt(), 1);
 }
 
-// Plans without a 5-hour cap may report only the `limits` array. The weekly
-// usage and its reset must still come through from weekly_all.
+// Subscriptions with only a weekly quota may report just the `limits` array.
+// The weekly usage, its reset and the per-model limit must still come
+// through, for both monitors that share the Claude subscription.
 void SubscriptionToolsTest::claudeSyncWeeklyOnlyLimits()
 {
     MockClaudeServer server;
     server.claudeUsageBody = R"({"limits":[{"kind":"weekly_all","group":"weekly","percent":42,)"
-                             R"("resets_at":"2099-02-03T00:00:00Z","is_active":true}]})";
+                             R"("resets_at":"2099-02-03T00:00:00Z","is_active":true},)"
+                             R"({"kind":"weekly_scoped","group":"weekly","percent":17,)"
+                             R"("scope":{"model":{"display_name":"Fable"}},"is_active":false}]})";
     QVERIFY2(server.listen(), "port 8080 must be free for this test");
 
     EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
     qputenv("PLASMA_AI_MONITOR_DEMO", "1");
 
     ClaudeCodeMonitor claude;
-    QSignalSpy completedSpy(&claude, &SubscriptionToolBackend::syncCompleted);
-    claude.syncFromBrowser(QStringLiteral("sessionKey=test"), 0);
+    OpenCodeMonitor opencode;
+    const QList<SubscriptionToolBackend *> monitors{&claude, &opencode};
+    for (SubscriptionToolBackend *monitor : monitors) {
+        QSignalSpy completedSpy(monitor, &SubscriptionToolBackend::syncCompleted);
+        monitor->syncFromBrowser(QStringLiteral("sessionKey=test"), 0);
 
-    QVERIFY(completedSpy.wait(15000));
-    QCOMPARE(completedSpy.takeFirst().at(0).toBool(), true);
-    QCOMPARE(claude.secondaryUsageCount(), 42);
-    QCOMPARE(claude.hasSessionInfo(), false);
-    QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
-             QDateTime::fromString(QStringLiteral("2099-02-03T00:00:00Z"), Qt::ISODate).toUTC());
+        QVERIFY(completedSpy.wait(15000));
+        QVERIFY2(completedSpy.takeFirst().at(0).toBool(), qPrintable(monitor->toolName()));
+        QCOMPARE(monitor->usageCount(), 42);
+        QCOMPARE(monitor->periodEnd().toUTC(),
+                 QDateTime::fromString(QStringLiteral("2099-02-03T00:00:00Z"), Qt::ISODate).toUTC());
+        QCOMPARE(monitor->scopedLimits().size(), 1);
+        QCOMPARE(monitor->scopedLimits().first().toMap().value(QStringLiteral("percent")).toInt(), 17);
+    }
 }
 
 // Fires the 5-second activity debounce timer so the test does not wait for it.

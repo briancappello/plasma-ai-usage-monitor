@@ -20,7 +20,7 @@
         </entry>
         <entry name="chartQuotaWindow" type="String">
             <default>weekly</default>
-            <label>Which quota window the panel chart shows: weekly or session</label>
+            <label>Which quota window the panel chart shows: weekly or session (Codex 5-hour window)</label>
         </entry>
         <entry name="setupWizardCompleted" type="Bool">
             <default>false</default>
@@ -105,7 +105,7 @@
         </entry>
         <entry name="claudeCodeCustomLimit" type="Int">
             <default>0</default>
-            <label>Custom usage limit per 5h period (0 = use plan default)</label>
+            <label>Custom weekly usage limit (0 = use plan default)</label>
         </entry>
         <entry name="claudeCodeNotifications" type="Bool">
             <default>true</default>
@@ -121,7 +121,7 @@
         </entry>
         <entry name="openCodeCustomLimit" type="Int">
             <default>0</default>
-            <label>Custom usage limit per 5h period (0 = use plan default)</label>
+            <label>Custom weekly usage limit (0 = use plan default)</label>
         </entry>
         <entry name="openCodeNotifications" type="Bool">
             <default>true</default>
