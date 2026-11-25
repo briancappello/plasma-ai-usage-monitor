@@ -59,7 +59,7 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor && quotaPercent(t.monitor) >= 80) return true;
+            if (t && t.enabled && t.monitor && quotaLevel(t.monitor) >= 1) return true;
         }
         return false;
     }
@@ -75,8 +75,7 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor && (t.monitor.limitReached
-                || quotaPercent(t.monitor) >= 95)) return true;
+            if (t && t.enabled && t.monitor && (t.monitor.limitReached || quotaLevel(t.monitor) >= 2)) return true;
         }
         return false;
     }
@@ -270,6 +269,7 @@ MouseArea {
                     ? (chartMode.useSecondary ? chartMode.ccMonitor.secondaryPercentUsed
                                               : chartMode.ccMonitor.percentUsed) / 100.0
                     : 0.0
+                paceLevel: chartMode.ccAvailable ? compactRoot.quotaPaceLevel(chartMode.ccMonitor) : -1
             }
 
             UsageBar {
@@ -278,6 +278,7 @@ MouseArea {
                 Layout.fillHeight: true
                 visible: chartMode.scopedLimit !== null
                 pct: chartMode.scopedLimit ? (chartMode.scopedLimit.percent ?? 0) / 100.0 : 0.0
+                paceLevel: chartMode.scopedLimit ? (chartMode.scopedLimit.paceLevel ?? -1) : -1
             }
         }
     }
@@ -285,8 +286,12 @@ MouseArea {
     component UsageBar: Item {
         id: bar
         property double pct: 0.0
+        // Weekly quotas are colored by pace; -1 falls back to how much is used.
+        property int paceLevel: -1
         readonly property double fill: Math.max(0.0, Math.min(1.0, pct))
         readonly property color fillColor: {
+            if (paceLevel >= 0)
+                return Utils.paceColor(paceLevel, Kirigami.Theme);
             var p = pct * 100;
             if (p >= plasmoid.configuration.criticalThreshold)
                 return Kirigami.Theme.negativeTextColor;
@@ -388,13 +393,24 @@ MouseArea {
         return plasmoid.configuration.chartQuotaWindow !== "session" || monitor.usageLimit <= 0;
     }
 
-    // Highest of the panel's quota and any per-model weekly quota.
-    function quotaPercent(monitor) {
-        var pct = usesSecondaryQuota(monitor) ? monitor.secondaryPercentUsed : monitor.percentUsed;
+    // Pace level (-1 = not paced) of the panel's quota window: secondary or primary.
+    function quotaPaceLevel(monitor) {
+        return (usesSecondaryQuota(monitor) ? monitor.secondaryPaceLevel : monitor.paceLevel) ?? -1;
+    }
+
+    // 0 ok, 1 warning, 2 critical: the worst of the panel's quota and any
+    // per-model weekly quota. Weekly quotas are judged by pace (projected
+    // usage at reset); other windows by how much of them is used.
+    function quotaLevel(monitor) {
+        var level = quotaPaceLevel(monitor);
+        if (level < 0) {
+            var pct = usesSecondaryQuota(monitor) ? monitor.secondaryPercentUsed : monitor.percentUsed;
+            level = pct >= 95 ? 2 : pct >= 80 ? 1 : 0;
+        }
         var scoped = monitor.scopedLimits ?? [];
         for (var i = 0; i < scoped.length; i++)
-            pct = Math.max(pct, scoped[i].percent ?? 0);
-        return pct;
+            level = Math.max(level, scoped[i].paceLevel ?? 0);
+        return level;
     }
 
     function formatMetric(value) {

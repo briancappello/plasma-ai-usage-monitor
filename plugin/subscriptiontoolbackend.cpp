@@ -5,6 +5,28 @@
 #include <QTimeZone>
 #include "resilientnetworkaccessmanager.h"
 
+#include <algorithm>
+
+namespace {
+// Pace model: nearly all usage happens 06:00–22:00 Mountain time, every day.
+constexpr int kActiveStartHour = 6;
+constexpr int kActiveEndHour = 22;
+// Floor on elapsed active time, so a few percent in the first minutes of a
+// window doesn't extrapolate to an alarming rate.
+constexpr qint64 kMinActiveElapsedSecs = 4 * 3600;
+constexpr double kPaceWarningPercent = 85.0;
+constexpr double kPaceCriticalPercent = 100.0;
+
+const QTimeZone &paceTimeZone()
+{
+    static const QTimeZone tz = [] {
+        const QTimeZone mountain(QByteArrayLiteral("America/Denver"));
+        return mountain.isValid() ? mountain : QTimeZone::systemTimeZone();
+    }();
+    return tz;
+}
+} // namespace
+
 SubscriptionToolBackend::SubscriptionToolBackend(QObject *parent)
     : QObject(parent)
     , m_resetCheckTimer(new QTimer(this))
@@ -12,6 +34,8 @@ SubscriptionToolBackend::SubscriptionToolBackend(QObject *parent)
     // Check for period resets every 60 seconds
     m_resetCheckTimer->setInterval(60 * 1000);
     connect(m_resetCheckTimer, &QTimer::timeout, this, &SubscriptionToolBackend::checkAndResetPeriod);
+    connect(m_resetCheckTimer, &QTimer::timeout, this, &SubscriptionToolBackend::paceUpdated);
+    connect(this, &SubscriptionToolBackend::usageUpdated, this, &SubscriptionToolBackend::paceUpdated);
 }
 
 SubscriptionToolBackend::~SubscriptionToolBackend() = default;
@@ -288,6 +312,67 @@ QString SubscriptionToolBackend::secondaryTimeUntilReset() const
     return QStringLiteral("%1m").arg(mins);
 }
 
+// --- Pace ---
+
+qint64 SubscriptionToolBackend::activeSecondsBetween(const QDateTime &from, const QDateTime &to)
+{
+    if (!from.isValid() || !to.isValid() || to <= from) return 0;
+
+    const QTimeZone &tz = paceTimeZone();
+    const QDate lastDay = to.toTimeZone(tz).date();
+    qint64 total = 0;
+    for (QDate day = from.toTimeZone(tz).date(); day <= lastDay; day = day.addDays(1)) {
+        const QDateTime activeStart = std::max(from, QDateTime(day, QTime(kActiveStartHour, 0), tz));
+        const QDateTime activeEnd = std::min(to, QDateTime(day, QTime(kActiveEndHour, 0), tz));
+        if (activeStart < activeEnd) total += activeStart.secsTo(activeEnd);
+    }
+    return total;
+}
+
+double SubscriptionToolBackend::projectedPercentAtReset(double usedPercent, const QDateTime &windowStart,
+                                                        const QDateTime &windowEnd, const QDateTime &now)
+{
+    if (usedPercent <= 0.0) return 0.0;
+    const qint64 total = activeSecondsBetween(windowStart, windowEnd);
+    if (total <= 0) return usedPercent;
+    const qint64 elapsed = std::max(activeSecondsBetween(windowStart, std::min(now, windowEnd)),
+                                    std::min(kMinActiveElapsedSecs, total));
+    return usedPercent * static_cast<double>(total) / static_cast<double>(elapsed);
+}
+
+SubscriptionToolBackend::PaceLevel SubscriptionToolBackend::paceLevelFor(double projectedPercent)
+{
+    if (projectedPercent >= kPaceCriticalPercent) return PaceCritical;
+    if (projectedPercent >= kPaceWarningPercent) return PaceWarning;
+    return PaceOk;
+}
+
+double SubscriptionToolBackend::projectedPercent() const
+{
+    if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return percentUsed();
+    return projectedPercentAtReset(percentUsed(), m_periodStart, periodEnd(), QDateTime::currentDateTimeUtc());
+}
+
+int SubscriptionToolBackend::paceLevel() const
+{
+    if (primaryPeriodType() != Weekly) return PaceNone;
+    return paceLevelFor(projectedPercent());
+}
+
+double SubscriptionToolBackend::secondaryProjectedPercent() const
+{
+    if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0) return 0.0;
+    if (secondaryPeriodType() != Weekly) return secondaryPercentUsed();
+    return projectedPercentAtReset(secondaryPercentUsed(), m_secondaryPeriodStart, secondaryPeriodEnd(),
+                                   QDateTime::currentDateTimeUtc());
+}
+
+int SubscriptionToolBackend::secondaryPaceLevel() const
+{
+    if (!hasSecondaryLimit() || secondaryPeriodType() != Weekly) return PaceNone;
+    return paceLevelFor(secondaryProjectedPercent());
+}
+
 // --- Claude.ai usage ---
 
 bool SubscriptionToolBackend::applyClaudeUsage(const QJsonObject &root)
@@ -410,7 +495,25 @@ bool SubscriptionToolBackend::hasCredits() const { return false; }
 int SubscriptionToolBackend::remainingCredits() const { return m_remainingCredits; }
 void SubscriptionToolBackend::setRemainingCredits(int credits) { m_remainingCredits = credits; }
 
-QVariantList SubscriptionToolBackend::scopedLimits() const { return m_scopedLimits; }
+QVariantList SubscriptionToolBackend::scopedLimits() const
+{
+    // Scoped limits are weekly windows ending at resetsAt.
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    QVariantList withPace;
+    withPace.reserve(m_scopedLimits.size());
+    for (const QVariant &entry : m_scopedLimits) {
+        QVariantMap limit = entry.toMap();
+        const double percent = limit.value(QStringLiteral("percent")).toDouble();
+        const QDateTime resetsAt = QDateTime::fromString(limit.value(QStringLiteral("resetsAt")).toString(), Qt::ISODate);
+        const double projected = resetsAt.isValid()
+            ? projectedPercentAtReset(percent, resetsAt.addDays(-7), resetsAt, now)
+            : percent;
+        limit.insert(QStringLiteral("projectedPercent"), projected);
+        limit.insert(QStringLiteral("paceLevel"), static_cast<int>(paceLevelFor(projected)));
+        withPace.append(limit);
+    }
+    return withPace;
+}
 void SubscriptionToolBackend::setScopedLimits(const QVariantList &limits) { m_scopedLimits = limits; }
 
 // --- Browser Sync ---

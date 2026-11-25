@@ -33,7 +33,9 @@ Item {
         property int secondaryUsageLimit: 0
         property real percentUsed: 45
         property real secondaryPercentUsed: 0
-        property var scopedLimits: [{ name: "Fable", percent: 12 }]
+        property int paceLevel: 0
+        property int secondaryPaceLevel: -1
+        property var scopedLimits: [{ name: "Fable", percent: 12, paceLevel: 0 }]
         property int secondsUntilReset: 6 * 86400 + 2 * 3600
         property int secondarySecondsUntilReset: 0
         property bool limitReached: false
@@ -52,6 +54,8 @@ Item {
         property int secondaryUsageLimit: 100
         property real percentUsed: 23
         property real secondaryPercentUsed: 64
+        property int paceLevel: -1
+        property int secondaryPaceLevel: 0
         property var scopedLimits: []
         property int secondsUntilReset: 3600
         property int secondarySecondsUntilReset: 86400
@@ -88,19 +92,35 @@ Item {
             verify(scoped.y > quota.y);
             verify(quota.height > 0 && scoped.height > 0);
             compare(countdown.formatCountdown(), "6d 2h");
-
-            // Each bar is coloured by its own percentage.
-            monitor.percentUsed = 81;
-            compare(quota.fillColor, Kirigami.Theme.neutralTextColor);
+            compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
+
+            // Weekly color follows pace, not how much of the quota is used.
+            monitor.percentUsed = 96;
+            compare(quota.pct, 0.96);
+            compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
+            compare(compact.hasWarning, false);
+            compare(compact.hasCritical, false);
+            monitor.percentUsed = 20;
+            monitor.paceLevel = 1;
+            compare(quota.fillColor, Kirigami.Theme.neutralTextColor);
             compare(compact.hasWarning, true);
             compare(compact.hasCritical, false);
-
-            // A critical per-model limit raises the panel badge on its own.
-            monitor.percentUsed = 45;
-            monitor.scopedLimits = [{ name: "Fable", percent: 97 }];
-            compare(scoped.fillColor, Kirigami.Theme.negativeTextColor);
+            monitor.paceLevel = 2;
+            compare(quota.fillColor, Kirigami.Theme.negativeTextColor);
             compare(compact.hasCritical, true);
+            monitor.paceLevel = 0;
+            monitor.percentUsed = 45;
+
+            // Each bar has its own pace; a critical per-model pace raises the
+            // panel badge on its own, even at low usage.
+            monitor.scopedLimits = [{ name: "Fable", percent: 12, paceLevel: 2 }];
+            compare(scoped.fillColor, Kirigami.Theme.negativeTextColor);
+            compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
+            compare(compact.hasCritical, true);
+            monitor.scopedLimits = [{ name: "Fable", percent: 97, paceLevel: 0 }];
+            compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
+            compare(compact.hasCritical, false);
 
             // The session option cannot resurrect a 5-hour view for Claude.
             plasmoid.configuration.chartQuotaWindow = "session";
@@ -121,6 +141,12 @@ Item {
             plasmoid.configuration.chartQuotaWindow = "session";
             compare(quota.pct, 0.23);
             compare(countdown.formatCountdown(), "1h 00m");
+            // The 5-hour window isn't paced: it's colored by how much is used.
+            compare(quota.paceLevel, -1);
+            secondMonitor.percentUsed = 81;
+            compare(quota.fillColor, Kirigami.Theme.neutralTextColor);
+            compare(compact.hasWarning, true);
+            secondMonitor.percentUsed = 23;
             plasmoid.configuration.chartQuotaWindow = "weekly";
         }
     }

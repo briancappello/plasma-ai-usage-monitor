@@ -421,6 +421,11 @@ void SubscriptionToolsTest::claudeSyncParsesPercentageUsage()
     const QVariantMap fable = scoped.first().toMap();
     QCOMPARE(fable.value(QStringLiteral("name")).toString(), QStringLiteral("Fable"));
     QCOMPARE(fable.value(QStringLiteral("percent")).toInt(), 1);
+
+    // The weekly primary window is paced; there's no secondary window to pace.
+    QVERIFY(claude.paceLevel() != SubscriptionToolBackend::PaceNone);
+    QVERIFY(claude.projectedPercent() >= claude.percentUsed());
+    QCOMPARE(claude.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceNone));
 }
 
 // Subscriptions with only a weekly quota may report just the `limits` array.
