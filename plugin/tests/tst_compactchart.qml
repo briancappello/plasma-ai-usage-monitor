@@ -29,6 +29,8 @@ Item {
         property bool installed: true
         property bool hasSubscriptionCost: false
         property bool hasSecondaryLimit: false
+        property string periodLabel: "Weekly"
+        property string secondaryPeriodLabel: ""
         property int usageLimit: 100
         property int secondaryUsageLimit: 0
         property real percentUsed: 45
@@ -50,6 +52,8 @@ Item {
         property bool installed: true
         property bool hasSubscriptionCost: false
         property bool hasSecondaryLimit: true
+        property string periodLabel: "5-hour window"
+        property string secondaryPeriodLabel: "Weekly"
         property int usageLimit: 100
         property int secondaryUsageLimit: 100
         property real percentUsed: 23
@@ -76,6 +80,7 @@ Item {
             return null;
         }
         function named(name) { return descendant(compact, function(i) { return i.objectName === name; }); }
+        function letterOf(bar) { return descendant(bar, function(i) { return i.objectName === "barLetter"; }); }
 
         function test_stackedWeeklyAndScopedBars() {
             var quota = named("quotaBar");
@@ -94,6 +99,17 @@ Item {
             compare(countdown.formatCountdown(), "6d 2h");
             compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
+
+            // Each bar is labelled with its window's initial, sized to the bar
+            // and the same width so both tracks line up.
+            compare(quota.letter, "W");
+            compare(scoped.letter, "F");
+            var quotaLetter = letterOf(quota);
+            var scopedLetter = letterOf(scoped);
+            verify(quotaLetter.visible && scopedLetter.visible);
+            verify(quotaLetter.font.pixelSize >= quota.height);
+            compare(quotaLetter.parent.width, scopedLetter.parent.width);
+            verify(quotaLetter.parent.width > 0);
 
             // Weekly color follows pace, not how much of the quota is used.
             monitor.percentUsed = 96;
@@ -141,6 +157,7 @@ Item {
             plasmoid.configuration.chartQuotaWindow = "session";
             compare(quota.pct, 0.23);
             compare(countdown.formatCountdown(), "1h 00m");
+            compare(quota.letter, "5");
             // The 5-hour window isn't paced: it's colored by how much is used.
             compare(quota.paceLevel, -1);
             secondMonitor.percentUsed = 81;

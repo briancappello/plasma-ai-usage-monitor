@@ -270,6 +270,10 @@ MouseArea {
                                               : chartMode.ccMonitor.percentUsed) / 100.0
                     : 0.0
                 paceLevel: chartMode.ccAvailable ? compactRoot.quotaPaceLevel(chartMode.ccMonitor) : -1
+                label: chartMode.ccMonitor
+                    ? (chartMode.useSecondary ? chartMode.ccMonitor.secondaryPeriodLabel
+                                              : chartMode.ccMonitor.periodLabel) ?? ""
+                    : ""
             }
 
             UsageBar {
@@ -279,15 +283,32 @@ MouseArea {
                 visible: chartMode.scopedLimit !== null
                 pct: chartMode.scopedLimit ? (chartMode.scopedLimit.percent ?? 0) / 100.0 : 0.0
                 paceLevel: chartMode.scopedLimit ? (chartMode.scopedLimit.paceLevel ?? -1) : -1
+                label: chartMode.scopedLimit ? (chartMode.scopedLimit.name ?? "") : ""
             }
         }
     }
 
+    // Inked size of a capital "W" as a fraction of the font's pixel size, so a
+    // bar's letter can be sized to exactly the bar's height.
+    FontMetrics {
+        id: letterMetrics
+        font.family: Kirigami.Theme.defaultFont.family
+        font.weight: Font.DemiBold
+        font.pixelSize: 100
+        readonly property rect wBounds: tightBoundingRect("W")
+        readonly property real capRatio: Math.max(0.1, wBounds.height / 100)
+        readonly property real widthRatio: wBounds.width / 100
+    }
+
+    // A quota bar with the first letter of its window's name to its left
+    // (W = weekly, F = Fable, …), scaled to the bar's height.
     component UsageBar: Item {
         id: bar
         property double pct: 0.0
         // Weekly quotas are colored by pace; -1 falls back to how much is used.
         property int paceLevel: -1
+        property string label: ""
+        readonly property string letter: label.length > 0 ? label.charAt(0).toUpperCase() : ""
         readonly property double fill: Math.max(0.0, Math.min(1.0, pct))
         readonly property color fillColor: {
             if (paceLevel >= 0)
@@ -300,31 +321,62 @@ MouseArea {
             return Kirigami.Theme.positiveTextColor;
         }
 
-        // Track background
-        Rectangle {
-            anchors.fill: parent
-            radius: height / 2
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
-        }
-
-        // Filled portion
-        Rectangle {
+        // Fixed to the inked width of a "W" (the widest letter) so stacked
+        // bars line up.
+        Item {
+            id: letterBox
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: parent.width * bar.fill
-            radius: height / 2
-            color: bar.fillColor
-            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-            Behavior on color { ColorAnimation { duration: 300 } }
+            visible: bar.letter.length > 0
+            width: visible ? Math.ceil(letterLabel.font.pixelSize * letterMetrics.widthRatio) : 0
+
+            Text {
+                id: letterLabel
+                objectName: "barLetter"
+                anchors.centerIn: parent
+                text: bar.letter
+                color: Kirigami.Theme.textColor
+                font.family: Kirigami.Theme.defaultFont.family
+                font.weight: Font.DemiBold
+                font.pixelSize: Math.max(1, Math.round(bar.height / letterMetrics.capRatio))
+            }
         }
 
-        // "not available" placeholder
-        Rectangle {
-            anchors.fill: parent
-            radius: height / 2
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
-            visible: !chartMode.ccAvailable
+        Item {
+            id: track
+            anchors.left: letterBox.right
+            anchors.leftMargin: letterBox.visible ? Math.max(2, Math.round(letterLabel.font.pixelSize * 0.25)) : 0
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+
+            // Track background
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+            }
+
+            // Filled portion
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: parent.width * bar.fill
+                radius: height / 2
+                color: bar.fillColor
+                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+                Behavior on color { ColorAnimation { duration: 300 } }
+            }
+
+            // "not available" placeholder
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
+                visible: !chartMode.ccAvailable
+            }
         }
     }
 
