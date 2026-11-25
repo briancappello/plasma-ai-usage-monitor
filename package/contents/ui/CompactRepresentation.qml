@@ -200,71 +200,33 @@ MouseArea {
             onTriggered: countdownLabel.updateText()
         }
 
-        // Countdown label — anchored to the bottom, matching the Digital Clock's
-        // date string row in both size and vertical position
-        PlasmaComponents.Label {
-            id: countdownLabel
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.leftMargin: Kirigami.Units.smallSpacing
-            anchors.rightMargin: Kirigami.Units.smallSpacing
-            // Explicit height: one line at the default font size, scaled by DPI.
-            // This must be a stable non-zero value so the bar above can anchor to it.
-            height: Kirigami.Theme.defaultFont.pixelSize
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            // Use the same unstyled default font the clock's date string uses
-            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
-            font.weight: Kirigami.Theme.defaultFont.weight
-            text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
-
-            function formatCountdown() {
-                var secs = chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilReset
-                                                  : chartMode.ccMonitor.secondsUntilReset;
-                if (secs <= 0) return i18n("reset");
-                var h = Math.floor(secs / 3600);
-                var m = Math.floor((secs % 3600) / 60);
-                var s = secs % 60;
-                if (h >= 24) return Math.floor(h / 24) + "d " + (h % 24) + "h";
-                if (h > 0)
-                    return h + "h " + (m < 10 ? "0" : "") + m + "m";
-                return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
-            }
-
-            function updateText() {
-                text = chartMode.ccAvailable ? formatCountdown() : i18n("–");
-            }
-
-            Connections {
-                target: chartMode.ccMonitor ?? null
-                function onUsageUpdated() { countdownLabel.updateText(); }
-            }
-        }
-
         // First per-model weekly limit (e.g. Claude's "Fable"), if the tool has one
         readonly property var scopedLimit: {
             var limits = ccAvailable ? (ccMonitor.scopedLimits ?? []) : [];
             return limits.length > 0 ? limits[0] : null;
         }
 
-        // Usage bars — stacked in the space above the countdown label:
-        // the main quota on top, the per-model weekly quota below it.
+        // Equal-height rows: the main quota bar, the per-model weekly bar (if
+        // any) and the countdown. A negative edge margin reaches into the
+        // panel's own padding so the rows get that space too.
+        readonly property int edgeMargin: -2
+        readonly property int rowSpacing: 2
+        readonly property int rowCount: scopedLimit !== null ? 3 : 2
+        readonly property real rowHeight: Math.max(1,
+            (height - 2 * edgeMargin - (rowCount - 1) * rowSpacing) / rowCount)
+
         ColumnLayout {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: countdownLabel.top
+            anchors.fill: parent
             anchors.leftMargin: Kirigami.Units.smallSpacing
             anchors.rightMargin: Kirigami.Units.smallSpacing
-            anchors.topMargin: 1
-            anchors.bottomMargin: 5
-            spacing: 2
+            anchors.topMargin: chartMode.edgeMargin
+            anchors.bottomMargin: chartMode.edgeMargin
+            spacing: chartMode.rowSpacing
 
             UsageBar {
                 objectName: "quotaBar"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: chartMode.rowHeight
                 pct: chartMode.ccAvailable
                     ? (chartMode.useSecondary ? chartMode.ccMonitor.secondaryPercentUsed
                                               : chartMode.ccMonitor.percentUsed) / 100.0
@@ -279,11 +241,49 @@ MouseArea {
             UsageBar {
                 objectName: "scopedBar"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: chartMode.rowHeight
                 visible: chartMode.scopedLimit !== null
                 pct: chartMode.scopedLimit ? (chartMode.scopedLimit.percent ?? 0) / 100.0 : 0.0
                 paceLevel: chartMode.scopedLimit ? (chartMode.scopedLimit.paceLevel ?? -1) : -1
                 label: chartMode.scopedLimit ? (chartMode.scopedLimit.name ?? "") : ""
+            }
+
+            // Countdown label — the last row, same height as the bars above it.
+            // Uses the Digital Clock's date-string font.
+            PlasmaComponents.Label {
+                id: countdownLabel
+                objectName: "countdownRow"
+                Layout.fillWidth: true
+                Layout.preferredHeight: chartMode.rowHeight
+                Layout.maximumHeight: chartMode.rowHeight
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                // Use the same unstyled default font the clock's date string uses
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+                font.weight: Kirigami.Theme.defaultFont.weight
+                text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
+
+                function formatCountdown() {
+                    var secs = chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilReset
+                                                      : chartMode.ccMonitor.secondsUntilReset;
+                    if (secs <= 0) return i18n("reset");
+                    var h = Math.floor(secs / 3600);
+                    var m = Math.floor((secs % 3600) / 60);
+                    var s = secs % 60;
+                    if (h >= 24) return Math.floor(h / 24) + "d " + (h % 24) + "h";
+                    if (h > 0)
+                        return h + "h " + (m < 10 ? "0" : "") + m + "m";
+                    return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
+                }
+
+                function updateText() {
+                    text = chartMode.ccAvailable ? formatCountdown() : i18n("–");
+                }
+
+                Connections {
+                    target: chartMode.ccMonitor ?? null
+                    function onUsageUpdated() { countdownLabel.updateText(); }
+                }
             }
         }
     }

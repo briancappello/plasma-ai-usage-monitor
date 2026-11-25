@@ -96,6 +96,13 @@ Item {
             verify(scoped.visible);
             verify(scoped.y > quota.y);
             verify(quota.height > 0 && scoped.height > 0);
+
+            // Three equal rows: weekly bar, Fable bar, countdown.
+            var countdownRow = named("countdownRow");
+            verify(countdownRow !== null);
+            fuzzyCompare(scoped.height, quota.height, 0.5);
+            fuzzyCompare(countdownRow.height, quota.height, 0.5);
+            verify(countdownRow.y > scoped.y);
             compare(countdown.formatCountdown(), "6d 2h");
             compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
@@ -147,6 +154,9 @@ Item {
             // No per-model limit: a single bar fills the space.
             monitor.scopedLimits = [];
             verify(!scoped.visible);
+            // Without a per-model limit, the bar and countdown split the height.
+            tryVerify(function() { return quota.height > root.height / 3; });
+            fuzzyCompare(named("countdownRow").height, quota.height, 0.5);
 
             // Switching tools: Codex shows weekly by default, 5-hour on request.
             for (var index of [1, 0, 1]) {
