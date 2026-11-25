@@ -211,9 +211,11 @@ MouseArea {
         // panel's own padding so the rows get that space too.
         readonly property int edgeMargin: -2
         readonly property int rowSpacing: 2
+        // Extra space between the last bar and the countdown.
+        readonly property int countdownGap: 3
         readonly property int rowCount: scopedLimit !== null ? 3 : 2
         readonly property real rowHeight: Math.max(1,
-            (height - 2 * edgeMargin - (rowCount - 1) * rowSpacing) / rowCount)
+            (height - 2 * edgeMargin - (rowCount - 1) * rowSpacing - countdownGap) / rowCount)
         // One font size for every row (bar letters and countdown): a capital
         // letter's inked height fills the row.
         readonly property int rowFontPixelSize: Math.max(1, Math.round(rowHeight / letterMetrics.capRatio))
@@ -257,6 +259,7 @@ MouseArea {
                 id: countdownLabel
                 objectName: "countdownRow"
                 Layout.fillWidth: true
+                Layout.topMargin: chartMode.countdownGap
                 Layout.preferredHeight: chartMode.rowHeight
                 Layout.maximumHeight: chartMode.rowHeight
                 horizontalAlignment: Text.AlignHCenter

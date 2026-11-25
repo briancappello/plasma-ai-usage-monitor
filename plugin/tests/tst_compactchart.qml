@@ -103,6 +103,10 @@ Item {
             fuzzyCompare(scoped.height, quota.height, 0.5);
             fuzzyCompare(countdownRow.height, quota.height, 0.5);
             verify(countdownRow.y > scoped.y);
+            // The countdown sits further below the last bar than the bars sit apart.
+            var barGap = scoped.y - (quota.y + quota.height);
+            var countdownGap = countdownRow.y - (scoped.y + scoped.height);
+            verify(countdownGap > barGap);
             compare(countdown.formatCountdown(), "6d 2h");
             compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
