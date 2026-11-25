@@ -59,8 +59,7 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor
-                && (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 80) return true;
+            if (t && t.enabled && t.monitor && quotaLevel(t.monitor) >= 1) return true;
         }
         return false;
     }
@@ -76,8 +75,7 @@ MouseArea {
         var tools = root.allSubscriptionTools ?? [];
         for (var j = 0; j < tools.length; j++) {
             var t = tools[j];
-            if (t && t.enabled && t.monitor && (t.monitor.limitReached
-                || (usesSecondaryQuota(t.monitor) ? t.monitor.secondaryPercentUsed : t.monitor.percentUsed) >= 95)) return true;
+            if (t && t.enabled && t.monitor && (t.monitor.limitReached || quotaLevel(t.monitor) >= 2)) return true;
         }
         return false;
     }
@@ -277,6 +275,8 @@ MouseArea {
                 width: parent.width * pct
                 radius: height / 2
                 color: {
+                    if (chartMode.useSecondary)
+                        return Utils.paceColor(chartMode.ccMonitor.secondaryPaceLevel ?? 0, Kirigami.Theme);
                     var p = pct * 100;
                     if (p >= plasmoid.configuration.criticalThreshold)
                         return Kirigami.Theme.negativeTextColor;
@@ -361,6 +361,16 @@ MouseArea {
         if (!monitor || !monitor.hasSecondaryLimit || monitor.secondaryUsageLimit <= 0)
             return false;
         return plasmoid.configuration.chartQuotaWindow !== "session" || monitor.usageLimit <= 0;
+    }
+
+    // 0 ok, 1 warning, 2 critical. Weekly quotas are judged by pace (projected
+    // usage at reset); the session window by how much of it is used.
+    function quotaLevel(monitor) {
+        if (usesSecondaryQuota(monitor))
+            return monitor.secondaryPaceLevel ?? 0;
+        if (monitor.percentUsed >= 95) return 2;
+        if (monitor.percentUsed >= 80) return 1;
+        return 0;
     }
 
     function formatMetric(value) {

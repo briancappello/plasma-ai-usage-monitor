@@ -64,6 +64,11 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(int secondarySecondsUntilReset READ secondarySecondsUntilReset NOTIFY usageUpdated)
     Q_PROPERTY(QString secondaryTimeUntilReset READ secondaryTimeUntilReset NOTIFY usageUpdated)
 
+    // Secondary-window pace: usage projected to the reset by extrapolating the
+    // burn rate over active hours only (see activeSecondsBetween).
+    Q_PROPERTY(double secondaryProjectedPercent READ secondaryProjectedPercent NOTIFY paceUpdated)
+    Q_PROPERTY(int secondaryPaceLevel READ secondaryPaceLevel NOTIFY paceUpdated)
+
     // Session tracking (current active session percentage — from API sync)
     Q_PROPERTY(double sessionPercentUsed READ sessionPercentUsed NOTIFY usageUpdated)
     Q_PROPERTY(bool hasSessionInfo READ hasSessionInfo NOTIFY usageUpdated)
@@ -97,9 +102,9 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(bool hasCredits READ hasCredits NOTIFY usageUpdated)
 
     // Per-model scoped weekly limits (e.g., Claude's "Fable"). Variable length;
-    // each entry is a map { name, percent, resetsAt }. Empty for tools that
-    // don't report them.
-    Q_PROPERTY(QVariantList scopedLimits READ scopedLimits NOTIFY usageUpdated)
+    // each entry is a map { name, percent, resetsAt, projectedPercent, paceLevel }.
+    // Empty for tools that don't report them.
+    Q_PROPERTY(QVariantList scopedLimits READ scopedLimits NOTIFY paceUpdated)
 
 public:
     enum UsagePeriod {
@@ -109,6 +114,13 @@ public:
         Monthly     // Calendar month (resets 1st)
     };
     Q_ENUM(UsagePeriod)
+
+    enum PaceLevel {
+        PaceOk = 0,       // projected well under the limit
+        PaceWarning = 1,  // projected near the limit
+        PaceCritical = 2  // projected to hit the limit before reset
+    };
+    Q_ENUM(PaceLevel)
 
     explicit SubscriptionToolBackend(QObject *parent = nullptr);
     ~SubscriptionToolBackend() override;
@@ -153,6 +165,17 @@ public:
     QDateTime secondaryPeriodEnd() const;
     int secondarySecondsUntilReset() const;
     QString secondaryTimeUntilReset() const;
+
+    // Pace — secondary
+    double secondaryProjectedPercent() const;
+    int secondaryPaceLevel() const;
+
+    // Seconds of "active" time (06:00–22:00 America/Denver, every day) in [from, to).
+    static qint64 activeSecondsBetween(const QDateTime &from, const QDateTime &to);
+    // usedPercent extrapolated to windowEnd at the current active-hours burn rate.
+    static double projectedPercentAtReset(double usedPercent, const QDateTime &windowStart,
+                                          const QDateTime &windowEnd, const QDateTime &now);
+    static PaceLevel paceLevelFor(double projectedPercent);
 
     // Session (from API)
     double sessionPercentUsed() const;
@@ -208,6 +231,7 @@ Q_SIGNALS:
     void installedChanged();
     void planTierChanged();
     void usageUpdated();
+    void paceUpdated(); // on usageUpdated and every minute, since pace drifts with time
     void usageLimitChanged();
     void syncEnabledChanged();
     void syncStatusChanged();

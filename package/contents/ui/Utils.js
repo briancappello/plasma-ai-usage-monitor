@@ -43,6 +43,19 @@ function usageColor(percent, theme) {
 }
 
 /**
+ * Get a theme-appropriate color for a quota pace level (the backend's
+ * PaceLevel: 0 = on pace, 1 = near the limit, 2 = will run out before reset).
+ * @param {number} level - Pace level (0-2)
+ * @param {object} theme - Kirigami.Theme reference
+ * @returns {color} The appropriate status color
+ */
+function paceColor(level, theme) {
+    if (level >= 2) return theme.negativeTextColor;
+    if (level >= 1) return theme.neutralTextColor;
+    return theme.positiveTextColor;
+}
+
+/**
  * Get a theme-appropriate color for rate limit remaining ratio.
  * @param {number} remaining - Remaining count
  * @param {number} total - Total limit

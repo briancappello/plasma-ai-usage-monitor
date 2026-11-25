@@ -338,7 +338,7 @@ ColumnLayout {
                     contentItem: Rectangle {
                         width: parent.visualPosition * parent.width
                         height: 6; radius: 3
-                        color: usageColor(toolCard.monitor?.secondaryPercentUsed ?? 0)
+                        color: paceColor(toolCard.monitor?.secondaryPaceLevel ?? 0)
                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
                         Behavior on color { ColorAnimation { duration: 300 } }
                     }
@@ -348,10 +348,11 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     PlasmaComponents.Label {
-                        text: Math.round(toolCard.monitor?.secondaryPercentUsed ?? 0) + "% " + i18n("used")
+                        text: paceText(toolCard.monitor?.secondaryPercentUsed ?? 0,
+                                       toolCard.monitor?.secondaryProjectedPercent ?? 0)
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         opacity: 0.4
-                        color: usageColor(toolCard.monitor?.secondaryPercentUsed ?? 0)
+                        color: paceColor(toolCard.monitor?.secondaryPaceLevel ?? 0)
                     }
                     Item { Layout.fillWidth: true }
                     PlasmaComponents.Label {
@@ -408,17 +409,17 @@ ColumnLayout {
                             contentItem: Rectangle {
                                 width: parent.visualPosition * parent.width
                                 height: 6; radius: 3
-                                color: usageColor(modelData.percent ?? 0)
+                                color: paceColor(modelData.paceLevel ?? 0)
                                 Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
                                 Behavior on color { ColorAnimation { duration: 300 } }
                             }
                         }
 
                         PlasmaComponents.Label {
-                            text: (modelData.percent ?? 0) + "% " + i18n("used")
+                            text: paceText(modelData.percent ?? 0, modelData.projectedPercent ?? 0)
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             opacity: 0.4
-                            color: usageColor(modelData.percent ?? 0)
+                            color: paceColor(modelData.paceLevel ?? 0)
                         }
                     }
                 }
@@ -782,6 +783,16 @@ ColumnLayout {
 
     function usageColor(percent) {
         return Utils.usageColor(percent, Kirigami.Theme);
+    }
+
+    function paceColor(level) {
+        return Utils.paceColor(level, Kirigami.Theme);
+    }
+
+    function paceText(usedPercent, projectedPercent) {
+        if (usedPercent <= 0)
+            return i18n("%1% used", 0);
+        return i18n("%1% used · on pace for %2%", Math.round(usedPercent), Math.round(projectedPercent));
     }
 
     function formatRelativeTime(dateTime) {

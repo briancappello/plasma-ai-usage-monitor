@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import org.kde.kirigami as Kirigami
 import "../../package/contents/ui" as Widget
 
 Item {
@@ -32,6 +33,7 @@ Item {
         property real sessionPercentUsed: 0
         property real percentUsed: 0
         property real secondaryPercentUsed: 45
+        property int secondaryPaceLevel: 0
         property int secondsUntilReset: 0
         property int secondarySecondsUntilReset: 6 * 86400 + 2 * 3600
         property bool limitReached: false
@@ -50,6 +52,7 @@ Item {
         property real sessionPercentUsed: 23
         property real percentUsed: 23
         property real secondaryPercentUsed: 64
+        property int secondaryPaceLevel: 0
         property int secondsUntilReset: 3600
         property int secondarySecondsUntilReset: 86400
         property bool limitReached: false
@@ -77,11 +80,23 @@ Item {
             verify(countdown !== null);
             compare(fill.pct, 0.45);
             compare(countdown.formatCountdown(), "6d 2h");
-            monitor.secondaryPercentUsed = 81;
-            compare(fill.pct, 0.81);
-            compare(compact.hasWarning, true);
+            tryCompare(fill, "color", Kirigami.Theme.positiveTextColor);
+
+            // Weekly color follows pace, not how much of the quota is used.
             monitor.secondaryPercentUsed = 96;
+            compare(fill.pct, 0.96);
+            compare(compact.hasWarning, false);
+            compare(compact.hasCritical, false);
+            tryCompare(fill, "color", Kirigami.Theme.positiveTextColor);
+            monitor.secondaryPercentUsed = 20;
+            monitor.secondaryPaceLevel = 1;
+            compare(compact.hasWarning, true);
+            compare(compact.hasCritical, false);
+            tryCompare(fill, "color", Kirigami.Theme.neutralTextColor);
+            monitor.secondaryPaceLevel = 2;
             compare(compact.hasCritical, true);
+            tryCompare(fill, "color", Kirigami.Theme.negativeTextColor);
+            monitor.secondaryPaceLevel = 0;
 
             // Weekly is the default even when a session window also exists.
             monitor.secondaryPercentUsed = 45;

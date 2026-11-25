@@ -71,7 +71,101 @@ private Q_SLOTS:
     void testDefaultLimitForPlan();
     void testTimeUntilResetFormat();
     void testUsesResilientNetworkManager();
+    void testActiveSecondsBetween();
+    void testProjectedPercentAtReset();
+    void testPaceLevelFor();
+    void testSecondaryPaceProperties();
 };
+
+namespace {
+QDateTime mountain(int y, int m, int d, int h, int min = 0)
+{
+    return QDateTime(QDate(y, m, d), QTime(h, min), QTimeZone(QByteArrayLiteral("America/Denver")));
+}
+constexpr qint64 kHour = 3600;
+}
+
+void SubscriptionToolBackendTest::testActiveSecondsBetween()
+{
+    // A full week counts 16 active hours (06:00–22:00) per day.
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(mountain(2026, 1, 12, 0), mountain(2026, 1, 19, 0)),
+             7 * 16 * kHour);
+    // Still 16 h/day across the DST switch (2026-03-08), since 06:00 and 22:00 are local.
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(mountain(2026, 3, 5, 0), mountain(2026, 3, 12, 0)),
+             7 * 16 * kHour);
+    // Overnight is inactive.
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(mountain(2026, 1, 12, 22), mountain(2026, 1, 13, 6)), 0);
+    // Partial overlap at both ends: 20:00–22:00 plus 06:00–09:30.
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(mountain(2026, 1, 12, 20), mountain(2026, 1, 13, 9, 30)),
+             2 * kHour + 3 * kHour + 30 * 60);
+    // The zone conversion works for UTC inputs too (13:00Z = 06:00 MST).
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(
+                 QDateTime(QDate(2026, 1, 12), QTime(13, 0), QTimeZone::utc()),
+                 QDateTime(QDate(2026, 1, 12), QTime(14, 0), QTimeZone::utc())),
+             kHour);
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(mountain(2026, 1, 13, 0), mountain(2026, 1, 12, 0)), 0);
+    QCOMPARE(SubscriptionToolBackend::activeSecondsBetween(QDateTime(), mountain(2026, 1, 12, 0)), 0);
+}
+
+void SubscriptionToolBackendTest::testProjectedPercentAtReset()
+{
+    // Window Mon 06:00 → next Mon 06:00: 112 active hours.
+    const QDateTime start = mountain(2026, 1, 12, 6);
+    const QDateTime end = start.addDays(7);
+    // Wed 22:00: three active days (48 h) elapsed.
+    const QDateTime wedNight = mountain(2026, 1, 14, 22);
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(30, start, end, wedNight), 30.0 * 112 / 48);
+
+    // Overnight the projection holds steady instead of drifting greener.
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(30, start, end, mountain(2026, 1, 15, 3)),
+             30.0 * 112 / 48);
+
+    // Early in the window, elapsed time is floored at 4 active hours.
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(2, start, end, start.addSecs(30 * 60)),
+             2.0 * 112 / 4);
+
+    // After the window ends, the projection is just what was used.
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(60, start, end, end.addDays(1)), 60.0);
+
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(0, start, end, wedNight), 0.0);
+    // Unknown window: fall back to the raw percentage.
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(42, QDateTime(), QDateTime(), wedNight), 42.0);
+}
+
+void SubscriptionToolBackendTest::testPaceLevelFor()
+{
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(0), SubscriptionToolBackend::PaceOk);
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(84.9), SubscriptionToolBackend::PaceOk);
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(85), SubscriptionToolBackend::PaceWarning);
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(99.9), SubscriptionToolBackend::PaceWarning);
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(100), SubscriptionToolBackend::PaceCritical);
+    QCOMPARE(SubscriptionToolBackend::paceLevelFor(250), SubscriptionToolBackend::PaceCritical);
+}
+
+void SubscriptionToolBackendTest::testSecondaryPaceProperties()
+{
+    TestToolBackend t;
+    t.setHasSecondary(true);
+    t.setSecondaryUsageLimit(100);
+
+    // A window that just ended: the projection equals usage.
+    t.setSecondaryPeriodStart(QDateTime::currentDateTimeUtc().addDays(-7).addSecs(-60));
+    t.setSecondaryUsageCount(90);
+    QCOMPARE(t.secondaryProjectedPercent(), 90.0);
+    QCOMPARE(t.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceWarning));
+    t.setSecondaryUsageCount(100);
+    QCOMPARE(t.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceCritical));
+
+    // A burn rate that outruns the window goes red even at low absolute usage.
+    t.setSecondaryPeriodStart(QDateTime::currentDateTimeUtc());
+    t.setSecondaryUsageCount(30);
+    QVERIFY(t.secondaryProjectedPercent() >= 100.0);
+    QCOMPARE(t.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceCritical));
+
+    QSignalSpy paceSpy(&t, &SubscriptionToolBackend::paceUpdated);
+    Q_EMIT t.usageUpdated();
+    QCOMPARE(paceSpy.count(), 1);
+}
 
 void SubscriptionToolBackendTest::testUsesResilientNetworkManager()
 {
