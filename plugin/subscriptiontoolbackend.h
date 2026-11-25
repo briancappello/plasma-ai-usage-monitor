@@ -224,6 +224,9 @@ protected:
     void setPeriodStart(const QDateTime &start);
     void setSecondaryPeriodStart(const QDateTime &start);
     void setLastActivity(const QDateTime &time);
+    // Marks local tool activity without counting it against the quota, for
+    // tools whose quota is a server-reported percentage, not a message count.
+    void recordActivity();
 
     // Sync helpers for subclasses
     void setSyncing(bool syncing);

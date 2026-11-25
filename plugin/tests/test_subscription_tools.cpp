@@ -136,6 +136,7 @@ private Q_SLOTS:
     void browserSyncUnsupportedBrowserDiagnostics();
     void claudeSyncParsesPercentageUsage();
     void claudeSyncWeeklyOnlyLimits();
+    void claudeLocalActivityDoesNotInflatePercent();
     void codexSyncParsesWeeklyUsage();
     void codexSyncRejectsInvalidResponses_data();
     void codexSyncRejectsInvalidResponses();
@@ -440,6 +441,80 @@ void SubscriptionToolsTest::claudeSyncWeeklyOnlyLimits()
     QCOMPARE(claude.hasSessionInfo(), false);
     QCOMPARE(claude.secondaryPeriodEnd().toUTC(),
              QDateTime::fromString(QStringLiteral("2099-02-03T00:00:00Z"), Qt::ISODate).toUTC());
+}
+
+// Fires the 5-second activity debounce timer so the test does not wait for it.
+static bool fireActivityDebounce(QObject *monitor)
+{
+    bool fired = false;
+    for (QTimer *timer : monitor->findChildren<QTimer *>()) {
+        if (timer->interval() == 5000 && timer->isActive()) {
+            fired = QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection) || fired;
+        }
+    }
+    return fired;
+}
+
+// Regression: Claude's quota is a 0–100 percent scale shared by every machine
+// on the account. Local file activity must never add "messages" to it, or a
+// machine that runs Claude Code drifts above the real API value between syncs
+// (and climbs without bound when sync fails), turning its panel bar red.
+void SubscriptionToolsTest::claudeLocalActivityDoesNotInflatePercent()
+{
+    MockClaudeServer server;
+    QVERIFY2(server.listen(), "port 8080 must be free for this test");
+    EnvVarGuard demoGuard("PLASMA_AI_MONITOR_DEMO");
+    qputenv("PLASMA_AI_MONITOR_DEMO", "1");
+
+    QTemporaryDir home;
+    QVERIFY(home.isValid());
+    EnvVarGuard homeGuard("HOME");
+    EnvVarGuard configGuard("CLAUDE_CONFIG_DIR");
+    EnvVarGuard dataGuard("XDG_DATA_HOME");
+    qputenv("HOME", home.path().toUtf8());
+    qunsetenv("CLAUDE_CONFIG_DIR");
+    qputenv("XDG_DATA_HOME", (home.path() + QStringLiteral("/.local/share")).toUtf8());
+    QVERIFY(QDir().mkpath(home.path() + QStringLiteral("/.claude/projects/demo")));
+    QVERIFY(QDir().mkpath(home.path() + QStringLiteral("/.local/share/opencode")));
+    QFile wal(home.path() + QStringLiteral("/.local/share/opencode/opencode.db-wal"));
+    QVERIFY(wal.open(QIODevice::WriteOnly));
+    wal.write("x");
+    wal.close();
+
+    ClaudeCodeMonitor claude;
+    OpenCodeMonitor opencode;
+    const QList<SubscriptionToolBackend *> monitors{&claude, &opencode};
+    for (SubscriptionToolBackend *monitor : monitors) {
+        QSignalSpy completed(monitor, &SubscriptionToolBackend::syncCompleted);
+        QSignalSpy activity(monitor, &SubscriptionToolBackend::activityDetected);
+        // main.qml applies the plan default: a 0–100 percent scale.
+        monitor->setUsageLimit(100);
+        monitor->setSecondaryUsageLimit(100);
+
+        // Before any sync: activity is still not a percentage point.
+        monitor->detectActivity();
+        QVERIFY2(fireActivityDebounce(monitor), qPrintable(monitor->toolName()));
+        QCOMPARE(monitor->usageCount(), 0);
+        QCOMPARE(monitor->secondaryUsageCount(), 0);
+        QCOMPARE(activity.count(), 1);
+        QVERIFY(monitor->lastActivity().isValid());
+
+        if (monitor == &claude) {
+            monitor->syncFromBrowser(QStringLiteral("sessionKey=test"), 0);
+            QVERIFY(completed.wait(15000));
+            QVERIFY(completed.takeFirst().at(0).toBool());
+            const int synced = monitor->usageCount();
+            const int syncedWeekly = monitor->secondaryUsageCount();
+
+            // A newer project dir than the first scan saw = new activity.
+            QTest::qWait(1100);
+            QVERIFY(QDir().mkpath(home.path() + QStringLiteral("/.claude/projects/demo2")));
+            monitor->detectActivity();
+            QVERIFY(fireActivityDebounce(monitor));
+            QCOMPARE(monitor->usageCount(), synced);
+            QCOMPARE(monitor->secondaryUsageCount(), syncedWeekly);
+        }
+    }
 }
 
 void SubscriptionToolsTest::codexSyncParsesWeeklyUsage()

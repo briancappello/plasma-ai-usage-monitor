@@ -170,6 +170,13 @@ void SubscriptionToolBackend::incrementUsage()
     Q_EMIT activityDetected(toolName());
 }
 
+void SubscriptionToolBackend::recordActivity()
+{
+    m_lastActivity = QDateTime::currentDateTimeUtc();
+    Q_EMIT usageUpdated();
+    Q_EMIT activityDetected(toolName());
+}
+
 void SubscriptionToolBackend::resetUsage()
 {
     m_usageCount = 0;

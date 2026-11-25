@@ -18,13 +18,15 @@ ClaudeCodeMonitor::ClaudeCodeMonitor(QObject *parent)
     , m_watcher(new QFileSystemWatcher(this))
     , m_debounceTimer(new QTimer(this))
 {
-    // Debounce: multiple filesystem events within 5 seconds count as one message
+    // Debounce: multiple filesystem events within 5 seconds are one activity.
     m_debounceTimer->setSingleShot(true);
     m_debounceTimer->setInterval(5000);
     connect(m_debounceTimer, &QTimer::timeout, this, [this]() {
         if (m_pendingIncrement) {
             m_pendingIncrement = false;
-            incrementUsage();
+            // The quota is a 0–100 percent from the API, shared by every machine
+            // on the account; a filesystem event is not a percentage point.
+            recordActivity();
         }
     });
 
