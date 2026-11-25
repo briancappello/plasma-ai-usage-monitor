@@ -115,6 +115,9 @@ Item {
             var scopedLetter = letterOf(scoped);
             verify(quotaLetter.visible && scopedLetter.visible);
             verify(quotaLetter.font.pixelSize >= quota.height);
+            // Both letters and the countdown share one font size.
+            compare(scopedLetter.font.pixelSize, quotaLetter.font.pixelSize);
+            compare(named("countdownRow").font.pixelSize, quotaLetter.font.pixelSize);
             compare(quotaLetter.parent.width, scopedLetter.parent.width);
             verify(quotaLetter.parent.width > 0);
 

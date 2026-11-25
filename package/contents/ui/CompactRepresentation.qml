@@ -214,6 +214,9 @@ MouseArea {
         readonly property int rowCount: scopedLimit !== null ? 3 : 2
         readonly property real rowHeight: Math.max(1,
             (height - 2 * edgeMargin - (rowCount - 1) * rowSpacing) / rowCount)
+        // One font size for every row (bar letters and countdown): a capital
+        // letter's inked height fills the row.
+        readonly property int rowFontPixelSize: Math.max(1, Math.round(rowHeight / letterMetrics.capRatio))
 
         ColumnLayout {
             anchors.fill: parent
@@ -248,8 +251,8 @@ MouseArea {
                 label: chartMode.scopedLimit ? (chartMode.scopedLimit.name ?? "") : ""
             }
 
-            // Countdown label — the last row, same height as the bars above it.
-            // Uses the Digital Clock's date-string font.
+            // Countdown label — the last row, same height and font size as the
+            // bars' letters above it.
             PlasmaComponents.Label {
                 id: countdownLabel
                 objectName: "countdownRow"
@@ -258,8 +261,8 @@ MouseArea {
                 Layout.maximumHeight: chartMode.rowHeight
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                // Use the same unstyled default font the clock's date string uses
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 0.9
+                font.family: Kirigami.Theme.defaultFont.family
+                font.pixelSize: chartMode.rowFontPixelSize
                 font.weight: Kirigami.Theme.defaultFont.weight
                 text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
 
@@ -339,7 +342,7 @@ MouseArea {
                 color: Kirigami.Theme.textColor
                 font.family: Kirigami.Theme.defaultFont.family
                 font.weight: Font.DemiBold
-                font.pixelSize: Math.max(1, Math.round(bar.height / letterMetrics.capRatio))
+                font.pixelSize: chartMode.rowFontPixelSize
             }
         }
 
