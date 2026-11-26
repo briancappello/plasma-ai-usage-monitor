@@ -207,15 +207,17 @@ MouseArea {
         }
 
         // Equal-height rows: the main quota bar, the per-model weekly bar (if
-        // any) and the countdown. A negative edge margin reaches into the
-        // panel's own padding so the rows get that space too.
-        readonly property int edgeMargin: -2
+        // any) and the countdown.
+        readonly property int topEdgeMargin: 1
+        readonly property int bottomEdgeMargin: 0
         readonly property int rowSpacing: 2
         // Extra space between the last bar and the countdown.
         readonly property int countdownGap: 3
         readonly property int rowCount: scopedLimit !== null ? 3 : 2
-        readonly property real rowHeight: Math.max(1,
-            (height - 2 * edgeMargin - (rowCount - 1) * rowSpacing - countdownGap) / rowCount)
+        // Whole pixels: the layout snaps rows to pixel positions, so fractional
+        // heights would push the last row past the bottom edge.
+        readonly property int rowHeight: Math.max(1, Math.floor(
+            (height - topEdgeMargin - bottomEdgeMargin - (rowCount - 1) * rowSpacing - countdownGap) / rowCount))
         // One font size for every row (bar letters and countdown): a capital
         // letter's inked height fills the row.
         readonly property int rowFontPixelSize: Math.max(1, Math.round(rowHeight / letterMetrics.capRatio))
@@ -224,8 +226,8 @@ MouseArea {
             anchors.fill: parent
             anchors.leftMargin: Kirigami.Units.smallSpacing
             anchors.rightMargin: Kirigami.Units.smallSpacing
-            anchors.topMargin: chartMode.edgeMargin
-            anchors.bottomMargin: chartMode.edgeMargin
+            anchors.topMargin: chartMode.topEdgeMargin
+            anchors.bottomMargin: chartMode.bottomEdgeMargin
             spacing: chartMode.rowSpacing
 
             UsageBar {

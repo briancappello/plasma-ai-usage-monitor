@@ -107,6 +107,9 @@ Item {
             var barGap = scoped.y - (quota.y + quota.height);
             var countdownGap = countdownRow.y - (scoped.y + scoped.height);
             verify(countdownGap > barGap);
+            // Rows stay inside the widget, leaving the panel's padding alone.
+            verify(quota.mapToItem(compact, 0, 0).y >= 0);
+            verify(countdownRow.mapToItem(compact, 0, countdownRow.height).y <= compact.height);
             compare(countdown.formatCountdown(), "6d 2h");
             compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
