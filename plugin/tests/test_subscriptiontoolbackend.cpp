@@ -74,6 +74,7 @@ private Q_SLOTS:
     void testActiveSecondsBetween();
     void testProjectedPercentAtReset();
     void testSecondsUntilExhausted();
+    void testRecentEstimate();
     void testPaceLevelFor();
     void testSecondaryPaceProperties();
 };
@@ -121,9 +122,10 @@ void SubscriptionToolBackendTest::testProjectedPercentAtReset()
     QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(30, start, end, mountain(2026, 1, 15, 3)),
              30.0 * 112 / 48);
 
-    // Early in the window, elapsed time is floored at 4 active hours.
+    // Early in the window, elapsed time is floored at 4 active hours: 2% per
+    // 4 h over the remaining 111.5 h.
     QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(2, start, end, start.addSecs(30 * 60)),
-             2.0 * 112 / 4);
+             2.0 + 2.0 / 4 * 111.5);
 
     // After the window ends, the projection is just what was used.
     QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(60, start, end, end.addDays(1)), 60.0);
@@ -160,6 +162,59 @@ void SubscriptionToolBackendTest::testSecondsUntilExhausted()
     QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(-1), QString());
     QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(0), QStringLiteral("now"));
     QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(56 * kHour), QStringLiteral("2d 8h"));
+}
+
+void SubscriptionToolBackendTest::testRecentEstimate()
+{
+    using Sample = SubscriptionToolBackend::PaceSample;
+    // Window Mon 06:00 → next Mon 06:00; Wed 12:00 leaves 74 active hours.
+    const QDateTime end = mountain(2026, 1, 19, 6);
+    const QDateTime noon = mountain(2026, 1, 14, 12);
+    // A slow Monday, then 1% an hour over the last two hours.
+    const QList<Sample> ticks{{mountain(2026, 1, 12, 10), 10}, {mountain(2026, 1, 14, 10), 50},
+                              {mountain(2026, 1, 14, 11), 51}, {noon, 52}};
+
+    const auto estimate = SubscriptionToolBackend::recentEstimate(ticks, noon);
+    QVERIFY(estimate.has_value());
+    QCOMPARE(estimate->anchor, noon);
+    QCOMPARE(estimate->percent, 52.0);
+    QCOMPARE(estimate->ratePerActiveSec, 1.0 / kHour);
+    QCOMPARE(SubscriptionToolBackend::projectedPercentAt(*estimate, end), 52.0 + 74);
+    // 48% at 1%/h is 48 active hours: Wed 10 h + Thu + Fri + Sat 6 h, so Sat 12:00.
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(*estimate, end, noon), 72 * kHour);
+
+    // With no new data, the countdown follows the clock.
+    const QDateTime twoMinutesLater = noon.addSecs(120);
+    const auto later = SubscriptionToolBackend::recentEstimate(ticks, twoMinutesLater);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(*later, end, twoMinutesLater), 72 * kHour - 120);
+
+    // Ticks are uneven: a tick 1.5x the usual gap away still counts down.
+    const QDateTime late = mountain(2026, 1, 14, 13, 30);
+    const auto lateEstimate = SubscriptionToolBackend::recentEstimate(ticks, late);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(*lateEstimate, end, late), 72 * kHour - 90 * 60);
+
+    // Once the next tick is twice overdue, the rate is capped (under 2 points in
+    // 3 hours) and the countdown stops falling.
+    const QDateTime overdue = mountain(2026, 1, 14, 15);
+    const auto quiet = SubscriptionToolBackend::recentEstimate(ticks, overdue);
+    QCOMPARE(quiet->ratePerActiveSec, 2.0 / (3 * kHour));
+    QVERIFY(SubscriptionToolBackend::secondsUntilExhausted(*quiet, end, overdue)
+            > SubscriptionToolBackend::secondsUntilExhausted(*later, end, twoMinutesLater));
+
+    // The recent rate is measured in wall-clock time: ticks before 06:00 prove usage.
+    const QList<Sample> early{{mountain(2026, 1, 14, 5), 50}, {mountain(2026, 1, 14, 6), 51},
+                              {mountain(2026, 1, 14, 7), 52}};
+    QCOMPARE(SubscriptionToolBackend::recentEstimate(early, mountain(2026, 1, 14, 7))->ratePerActiveSec,
+             1.0 / kHour);
+
+    // Slow usage: with one tick in the last two hours, reach back to the one before.
+    const QList<Sample> slow{{mountain(2026, 1, 13, 10), 40}, {noon, 52}};
+    QCOMPARE(SubscriptionToolBackend::recentEstimate(slow, noon)->ratePerActiveSec, 12.0 / (26 * kHour));
+
+    // Not enough ticks, or no rise between them: no recent estimate.
+    QVERIFY(!SubscriptionToolBackend::recentEstimate({}, noon).has_value());
+    QVERIFY(!SubscriptionToolBackend::recentEstimate({{noon, 52}}, noon).has_value());
+    QVERIFY(!SubscriptionToolBackend::recentEstimate({{noon.addSecs(-60), 52}, {noon, 52}}, noon).has_value());
 }
 
 void SubscriptionToolBackendTest::testPaceLevelFor()

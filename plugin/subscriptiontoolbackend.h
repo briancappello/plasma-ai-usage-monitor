@@ -7,6 +7,10 @@
 #include <QTimer>
 #include <QJsonObject>
 #include <QVariantList>
+#include <QHash>
+#include <QList>
+
+#include <optional>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -65,13 +69,16 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(QString secondaryTimeUntilReset READ secondaryTimeUntilReset NOTIFY usageUpdated)
 
     // Weekly-window pace: usage projected to the reset by extrapolating the
-    // burn rate over active hours only (see activeSecondsBetween). Only weekly
-    // windows are paced; paceLevel is PaceNone for any other window.
+    // burn rate over active hours only (see activeSecondsBetween). The rate is
+    // measured over the last two active hours once two usage ticks have been
+    // seen, and over the whole window until then. Only weekly windows are
+    // paced; paceLevel is PaceNone for any other window.
     Q_PROPERTY(double projectedPercent READ projectedPercent NOTIFY paceUpdated)
     Q_PROPERTY(int paceLevel READ paceLevel NOTIFY paceUpdated)
     Q_PROPERTY(double secondaryProjectedPercent READ secondaryProjectedPercent NOTIFY paceUpdated)
     Q_PROPERTY(int secondaryPaceLevel READ secondaryPaceLevel NOTIFY paceUpdated)
-    // Time from now until the weekly window hits 100% at that same burn rate;
+    // Time from now until the weekly window hits 100% at that same burn rate,
+    // counting down with the clock between usage ticks;
     // -1 / empty when it won't run out before the reset, 0 / "now" once it has.
     Q_PROPERTY(int secondsUntilExhausted READ secondsUntilExhausted NOTIFY paceUpdated)
     Q_PROPERTY(int secondarySecondsUntilExhausted READ secondarySecondsUntilExhausted NOTIFY paceUpdated)
@@ -184,11 +191,33 @@ public:
 
     // Seconds of "active" time (06:00–22:00 America/Denver, every day) in [from, to).
     static qint64 activeSecondsBetween(const QDateTime &from, const QDateTime &to);
-    // usedPercent extrapolated to windowEnd at the current active-hours burn rate.
+
+    // A usage tick: the moment a window's percentage was seen to change.
+    struct PaceSample {
+        QDateTime time;
+        double percent = 0.0;
+    };
+    // Usage was `percent` at `anchor`, rising `ratePerActiveSec` per active second.
+    struct PaceEstimate {
+        QDateTime anchor;
+        double percent = 0.0;
+        double ratePerActiveSec = 0.0;
+    };
+    // Burn rate averaged over the whole window so far, anchored at now.
+    static PaceEstimate weeklyAverageEstimate(double usedPercent, const QDateTime &windowStart,
+                                              const QDateTime &windowEnd, const QDateTime &now);
+    // Burn rate over the recent ticks, anchored at the last tick; nullopt until
+    // two ticks are known.
+    static std::optional<PaceEstimate> recentEstimate(const QList<PaceSample> &ticks, const QDateTime &now);
+    static double projectedPercentAt(const PaceEstimate &estimate, const QDateTime &windowEnd);
+    // Wall-clock seconds from now until the estimate reaches 100%: 0 if already
+    // there, -1 if not before windowEnd.
+    static qint64 secondsUntilExhausted(const PaceEstimate &estimate, const QDateTime &windowEnd,
+                                        const QDateTime &now);
+
+    // Weekly-average shorthands for the two functions above.
     static double projectedPercentAtReset(double usedPercent, const QDateTime &windowStart,
                                           const QDateTime &windowEnd, const QDateTime &now);
-    // Wall-clock seconds from now until usedPercent reaches 100% at the current
-    // active-hours burn rate: 0 if already there, -1 if not before windowEnd.
     static qint64 secondsUntilExhausted(double usedPercent, const QDateTime &windowStart,
                                         const QDateTime &windowEnd, const QDateTime &now);
     static QString timeUntilExhaustedText(qint64 secs);
@@ -295,6 +324,17 @@ protected:
 
 private:
     void checkLimitWarnings();
+    void recordPaceSamples();
+    PaceEstimate paceEstimate(const QString &key, double usedPercent, const QDateTime &windowStart,
+                              const QDateTime &windowEnd) const;
+
+    // Usage ticks per paced window ("primary", "secondary", "scoped:<name>").
+    struct PaceHistory {
+        bool seen = false;
+        double lastPercent = 0.0;
+        QList<PaceSample> ticks;
+    };
+    QHash<QString, PaceHistory> m_paceHistory;
 
     bool m_enabled = false;
     bool m_installed = false;

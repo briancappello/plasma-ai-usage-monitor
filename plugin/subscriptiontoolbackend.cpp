@@ -17,6 +17,10 @@ constexpr int kActiveEndHour = 22;
 constexpr qint64 kMinActiveElapsedSecs = 4 * 3600;
 constexpr double kPaceWarningPercent = 85.0;
 constexpr double kPaceCriticalPercent = 100.0;
+// Burn rate is measured over this much recent active time, once known.
+constexpr qint64 kRecentRateWindowSecs = 2 * 3600;
+constexpr qsizetype kMaxPaceTicks = 200;
+constexpr double kOverdueTickPoints = 2.0;
 
 const QTimeZone &paceTimeZone()
 {
@@ -70,6 +74,8 @@ SubscriptionToolBackend::SubscriptionToolBackend(QObject *parent)
     m_resetCheckTimer->setInterval(60 * 1000);
     connect(m_resetCheckTimer, &QTimer::timeout, this, &SubscriptionToolBackend::checkAndResetPeriod);
     connect(m_resetCheckTimer, &QTimer::timeout, this, &SubscriptionToolBackend::paceUpdated);
+    // Record before paceUpdated, so pace readers see the new sample.
+    connect(this, &SubscriptionToolBackend::usageUpdated, this, &SubscriptionToolBackend::recordPaceSamples);
     connect(this, &SubscriptionToolBackend::usageUpdated, this, &SubscriptionToolBackend::paceUpdated);
 }
 
@@ -338,32 +344,71 @@ qint64 SubscriptionToolBackend::activeSecondsBetween(const QDateTime &from, cons
     return total;
 }
 
+SubscriptionToolBackend::PaceEstimate SubscriptionToolBackend::weeklyAverageEstimate(
+    double usedPercent, const QDateTime &windowStart, const QDateTime &windowEnd, const QDateTime &now)
+{
+    PaceEstimate estimate{now, usedPercent, 0.0};
+    const qint64 total = activeSecondsBetween(windowStart, windowEnd);
+    if (usedPercent <= 0.0 || total <= 0) return estimate;
+    const qint64 elapsed = std::max(activeSecondsBetween(windowStart, std::min(now, windowEnd)),
+                                    std::min(kMinActiveElapsedSecs, total));
+    estimate.ratePerActiveSec = usedPercent / static_cast<double>(elapsed);
+    return estimate;
+}
+
+std::optional<SubscriptionToolBackend::PaceEstimate> SubscriptionToolBackend::recentEstimate(
+    const QList<PaceSample> &ticks, const QDateTime &now)
+{
+    if (ticks.size() < 2) return std::nullopt;
+    const PaceSample &last = ticks.last();
+    // Measure tick to tick over the last kRecentRateWindowSecs, reaching back to
+    // the tick before the last one when usage is slow. Ticks prove usage, so
+    // this is wall-clock time, even outside the active hours.
+    qsizetype first = ticks.size() - 2;
+    while (first > 0 && ticks[first - 1].time.secsTo(last.time) <= kRecentRateWindowSecs) --first;
+    const qint64 span = ticks[first].time.secsTo(last.time);
+    const double used = last.percent - ticks[first].percent;
+    if (span <= 0 || used <= 0.0) return std::nullopt;
+    double rate = used / static_cast<double>(span);
+    // Ticks come unevenly, so only once the next one is twice overdue is the
+    // silence taken as a slowdown: under two points used since the last tick.
+    const qint64 quiet = last.time.secsTo(now);
+    if (quiet > 0) {
+        const double maxPoints = std::min(kOverdueTickPoints, 100.0 - last.percent);
+        rate = std::min(rate, maxPoints / static_cast<double>(quiet));
+    }
+    return PaceEstimate{last.time, last.percent, rate};
+}
+
+double SubscriptionToolBackend::projectedPercentAt(const PaceEstimate &estimate, const QDateTime &windowEnd)
+{
+    return estimate.percent + estimate.ratePerActiveSec * static_cast<double>(activeSecondsBetween(estimate.anchor, windowEnd));
+}
+
+qint64 SubscriptionToolBackend::secondsUntilExhausted(const PaceEstimate &estimate, const QDateTime &windowEnd,
+                                                      const QDateTime &now)
+{
+    if (estimate.percent >= 100.0) return 0;
+    if (estimate.ratePerActiveSec <= 0.0 || !windowEnd.isValid() || now >= windowEnd) return -1;
+    // Active seconds from the anchor at this burn rate before usage reaches 100%.
+    // The run-out moment is fixed to the anchor, so the countdown follows the clock.
+    const double needed = (100.0 - estimate.percent) / estimate.ratePerActiveSec;
+    if (needed >= static_cast<double>(activeSecondsBetween(estimate.anchor, windowEnd))) return -1;
+    const QDateTime runsOut = addActiveSeconds(estimate.anchor, static_cast<qint64>(std::ceil(needed)));
+    if (!runsOut.isValid() || runsOut >= windowEnd) return -1;
+    return std::max<qint64>(1, now.secsTo(runsOut));
+}
+
 double SubscriptionToolBackend::projectedPercentAtReset(double usedPercent, const QDateTime &windowStart,
                                                         const QDateTime &windowEnd, const QDateTime &now)
 {
-    if (usedPercent <= 0.0) return 0.0;
-    const qint64 total = activeSecondsBetween(windowStart, windowEnd);
-    if (total <= 0) return usedPercent;
-    const qint64 elapsed = std::max(activeSecondsBetween(windowStart, std::min(now, windowEnd)),
-                                    std::min(kMinActiveElapsedSecs, total));
-    return usedPercent * static_cast<double>(total) / static_cast<double>(elapsed);
+    return projectedPercentAt(weeklyAverageEstimate(usedPercent, windowStart, windowEnd, now), windowEnd);
 }
 
 qint64 SubscriptionToolBackend::secondsUntilExhausted(double usedPercent, const QDateTime &windowStart,
                                                       const QDateTime &windowEnd, const QDateTime &now)
 {
-    if (usedPercent >= 100.0) return 0;
-    if (usedPercent <= 0.0 || now >= windowEnd) return -1;
-    const qint64 total = activeSecondsBetween(windowStart, windowEnd);
-    if (total <= 0) return -1;
-    const qint64 elapsed = std::max(activeSecondsBetween(windowStart, now),
-                                    std::min(kMinActiveElapsedSecs, total));
-    // Active seconds left at the current burn rate before usage reaches 100%.
-    const double needed = (100.0 - usedPercent) * static_cast<double>(elapsed) / usedPercent;
-    if (needed >= static_cast<double>(activeSecondsBetween(now, windowEnd))) return -1;
-    const QDateTime runsOut = addActiveSeconds(now, static_cast<qint64>(std::ceil(needed)));
-    if (!runsOut.isValid() || runsOut >= windowEnd) return -1;
-    return now.secsTo(runsOut);
+    return secondsUntilExhausted(weeklyAverageEstimate(usedPercent, windowStart, windowEnd, now), windowEnd, now);
 }
 
 QString SubscriptionToolBackend::timeUntilExhaustedText(qint64 secs)
@@ -378,10 +423,47 @@ SubscriptionToolBackend::PaceLevel SubscriptionToolBackend::paceLevelFor(double 
     return PaceOk;
 }
 
+void SubscriptionToolBackend::recordPaceSamples()
+{
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    const auto record = [this, &now](const QString &key, double percent) {
+        PaceHistory &history = m_paceHistory[key];
+        if (history.seen && qFuzzyCompare(1.0 + percent, 1.0 + history.lastPercent)) return;
+        if (history.seen && percent < history.lastPercent) {
+            history.ticks.clear(); // a new window started
+        } else if (history.seen) {
+            // Only observed changes are ticks: the first reading may be mid-step.
+            history.ticks.append({now, percent});
+            while (history.ticks.size() > kMaxPaceTicks) history.ticks.removeFirst();
+        }
+        history.seen = true;
+        history.lastPercent = percent;
+    };
+    if (m_usageLimit > 0) record(QStringLiteral("primary"), percentUsed());
+    if (hasSecondaryLimit() && m_secondaryUsageLimit > 0) record(QStringLiteral("secondary"), secondaryPercentUsed());
+    for (const QVariant &entry : std::as_const(m_scopedLimits)) {
+        const QVariantMap limit = entry.toMap();
+        record(QStringLiteral("scoped:") + limit.value(QStringLiteral("name")).toString(),
+               limit.value(QStringLiteral("percent")).toDouble());
+    }
+}
+
+SubscriptionToolBackend::PaceEstimate SubscriptionToolBackend::paceEstimate(
+    const QString &key, double usedPercent, const QDateTime &windowStart, const QDateTime &windowEnd) const
+{
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    const auto it = m_paceHistory.constFind(key);
+    if (it != m_paceHistory.constEnd() && qFuzzyCompare(1.0 + it->lastPercent, 1.0 + usedPercent)) {
+        if (const auto recent = recentEstimate(it->ticks, now)) return *recent;
+    }
+    return weeklyAverageEstimate(usedPercent, windowStart, windowEnd, now);
+}
+
 double SubscriptionToolBackend::projectedPercent() const
 {
     if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return percentUsed();
-    return projectedPercentAtReset(percentUsed(), m_periodStart, periodEnd(), QDateTime::currentDateTimeUtc());
+    return projectedPercentAt(paceEstimate(QStringLiteral("primary"), percentUsed(), m_periodStart, periodEnd()),
+                              periodEnd());
 }
 
 int SubscriptionToolBackend::paceLevel() const
@@ -394,8 +476,9 @@ double SubscriptionToolBackend::secondaryProjectedPercent() const
 {
     if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0) return 0.0;
     if (secondaryPeriodType() != Weekly) return secondaryPercentUsed();
-    return projectedPercentAtReset(secondaryPercentUsed(), m_secondaryPeriodStart, secondaryPeriodEnd(),
-                                   QDateTime::currentDateTimeUtc());
+    return projectedPercentAt(paceEstimate(QStringLiteral("secondary"), secondaryPercentUsed(),
+                                           m_secondaryPeriodStart, secondaryPeriodEnd()),
+                              secondaryPeriodEnd());
 }
 
 int SubscriptionToolBackend::secondaryPaceLevel() const
@@ -407,15 +490,18 @@ int SubscriptionToolBackend::secondaryPaceLevel() const
 int SubscriptionToolBackend::secondsUntilExhausted() const
 {
     if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return -1;
-    return static_cast<int>(secondsUntilExhausted(percentUsed(), m_periodStart, periodEnd(),
-                                                  QDateTime::currentDateTimeUtc()));
+    return static_cast<int>(secondsUntilExhausted(
+        paceEstimate(QStringLiteral("primary"), percentUsed(), m_periodStart, periodEnd()), periodEnd(),
+        QDateTime::currentDateTimeUtc()));
 }
 
 int SubscriptionToolBackend::secondarySecondsUntilExhausted() const
 {
     if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0 || secondaryPeriodType() != Weekly) return -1;
-    return static_cast<int>(secondsUntilExhausted(secondaryPercentUsed(), m_secondaryPeriodStart,
-                                                  secondaryPeriodEnd(), QDateTime::currentDateTimeUtc()));
+    return static_cast<int>(secondsUntilExhausted(
+        paceEstimate(QStringLiteral("secondary"), secondaryPercentUsed(), m_secondaryPeriodStart,
+                     secondaryPeriodEnd()),
+        secondaryPeriodEnd(), QDateTime::currentDateTimeUtc()));
 }
 
 QString SubscriptionToolBackend::timeUntilExhausted() const
@@ -560,12 +646,15 @@ QVariantList SubscriptionToolBackend::scopedLimits() const
         QVariantMap limit = entry.toMap();
         const double percent = limit.value(QStringLiteral("percent")).toDouble();
         const QDateTime resetsAt = QDateTime::fromString(limit.value(QStringLiteral("resetsAt")).toString(), Qt::ISODate);
-        const double projected = resetsAt.isValid()
-            ? projectedPercentAtReset(percent, resetsAt.addDays(-7), resetsAt, now)
-            : percent;
-        const qint64 exhausted = resetsAt.isValid()
-            ? secondsUntilExhausted(percent, resetsAt.addDays(-7), resetsAt, now)
-            : -1;
+        double projected = percent;
+        qint64 exhausted = -1;
+        if (resetsAt.isValid()) {
+            const PaceEstimate estimate = paceEstimate(
+                QStringLiteral("scoped:") + limit.value(QStringLiteral("name")).toString(), percent,
+                resetsAt.addDays(-7), resetsAt);
+            projected = projectedPercentAt(estimate, resetsAt);
+            exhausted = secondsUntilExhausted(estimate, resetsAt, now);
+        }
         limit.insert(QStringLiteral("projectedPercent"), projected);
         limit.insert(QStringLiteral("timeUntilExhausted"), timeUntilExhaustedText(exhausted));
         limit.insert(QStringLiteral("paceLevel"), static_cast<int>(paceLevelFor(projected)));
