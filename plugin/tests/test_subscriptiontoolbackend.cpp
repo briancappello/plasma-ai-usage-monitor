@@ -73,6 +73,7 @@ private Q_SLOTS:
     void testUsesResilientNetworkManager();
     void testActiveSecondsBetween();
     void testProjectedPercentAtReset();
+    void testSecondsUntilExhausted();
     void testPaceLevelFor();
     void testSecondaryPaceProperties();
 };
@@ -132,6 +133,35 @@ void SubscriptionToolBackendTest::testProjectedPercentAtReset()
     QCOMPARE(SubscriptionToolBackend::projectedPercentAtReset(42, QDateTime(), QDateTime(), wedNight), 42.0);
 }
 
+void SubscriptionToolBackendTest::testSecondsUntilExhausted()
+{
+    // Window Mon 06:00 → next Mon 06:00: 112 active hours.
+    const QDateTime start = mountain(2026, 1, 12, 6);
+    const QDateTime end = start.addDays(7);
+    const QDateTime wedNight = mountain(2026, 1, 14, 22);
+
+    // 60% in 48 active hours: the last 40% takes 32 active hours (Thu + Fri),
+    // so it runs out Fri 22:00, two wall-clock days away.
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(60, start, end, wedNight), 48 * kHour);
+    // Overnight hours don't count toward the burn, so the run-out time holds still.
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(60, start, end, mountain(2026, 1, 15, 3)),
+             43 * kHour);
+    // Mid-day: 50% in 40 active hours runs out after 40 more (Wed 8h + Thu + Fri).
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(50, start, end, mountain(2026, 1, 14, 14)),
+             56 * kHour);
+
+    // 30% by Wed night projects to 70%: it lasts until the reset.
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(30, start, end, wedNight), -1);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(100, start, end, wedNight), 0);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(0, start, end, wedNight), -1);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(60, start, end, end.addDays(1)), -1);
+    QCOMPARE(SubscriptionToolBackend::secondsUntilExhausted(60, QDateTime(), QDateTime(), wedNight), -1);
+
+    QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(-1), QString());
+    QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(0), QStringLiteral("now"));
+    QCOMPARE(SubscriptionToolBackend::timeUntilExhaustedText(56 * kHour), QStringLiteral("2d 8h"));
+}
+
 void SubscriptionToolBackendTest::testPaceLevelFor()
 {
     QCOMPARE(SubscriptionToolBackend::paceLevelFor(0), SubscriptionToolBackend::PaceOk);
@@ -161,6 +191,10 @@ void SubscriptionToolBackendTest::testSecondaryPaceProperties()
     t.setSecondaryUsageCount(30);
     QVERIFY(t.secondaryProjectedPercent() >= 100.0);
     QCOMPARE(t.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceCritical));
+    QVERIFY(!t.secondaryTimeUntilExhausted().isEmpty());
+
+    // The 5-hour primary window has no run-out estimate.
+    QVERIFY(t.timeUntilExhausted().isEmpty());
 
     // The 5-hour primary window isn't paced.
     t.setUsageLimit(100);

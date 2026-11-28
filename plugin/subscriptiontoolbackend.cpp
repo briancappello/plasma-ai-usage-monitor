@@ -6,6 +6,7 @@
 #include "resilientnetworkaccessmanager.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 // Pace model: nearly all usage happens 06:00–22:00 Mountain time, every day.
@@ -24,6 +25,40 @@ const QTimeZone &paceTimeZone()
         return mountain.isValid() ? mountain : QTimeZone::systemTimeZone();
     }();
     return tz;
+}
+
+QString formatDuration(qint64 secs)
+{
+    if (secs <= 0) return QStringLiteral("now");
+
+    const qint64 hours = secs / 3600;
+    const qint64 mins = (secs % 3600) / 60;
+
+    if (hours > 24) {
+        return QStringLiteral("%1d %2h").arg(hours / 24).arg(hours % 24);
+    }
+    if (hours > 0) {
+        return QStringLiteral("%1h %2m").arg(hours).arg(mins);
+    }
+    return QStringLiteral("%1m").arg(mins);
+}
+
+// The wall-clock instant reached after `activeSecs` of active time from `from`.
+QDateTime addActiveSeconds(const QDateTime &from, qint64 activeSecs)
+{
+    const QTimeZone &tz = paceTimeZone();
+    qint64 remaining = activeSecs;
+    QDate day = from.toTimeZone(tz).date();
+    // A week window never needs more than a few days; the bound guards the loop.
+    for (int i = 0; i < 366; ++i, day = day.addDays(1)) {
+        const QDateTime activeStart = std::max(from, QDateTime(day, QTime(kActiveStartHour, 0), tz));
+        const QDateTime activeEnd = QDateTime(day, QTime(kActiveEndHour, 0), tz);
+        if (activeStart >= activeEnd) continue;
+        const qint64 available = activeStart.secsTo(activeEnd);
+        if (remaining <= available) return activeStart.addSecs(remaining);
+        remaining -= available;
+    }
+    return QDateTime();
 }
 } // namespace
 
@@ -161,20 +196,7 @@ int SubscriptionToolBackend::secondsUntilReset() const
 
 QString SubscriptionToolBackend::timeUntilReset() const
 {
-    int secs = secondsUntilReset();
-    if (secs <= 0) return QStringLiteral("now");
-
-    int hours = secs / 3600;
-    int mins = (secs % 3600) / 60;
-
-    if (hours > 24) {
-        int days = hours / 24;
-        return QStringLiteral("%1d %2h").arg(days).arg(hours % 24);
-    }
-    if (hours > 0) {
-        return QStringLiteral("%1h %2m").arg(hours).arg(mins);
-    }
-    return QStringLiteral("%1m").arg(mins);
+    return formatDuration(secondsUntilReset());
 }
 
 QDateTime SubscriptionToolBackend::lastActivity() const { return m_lastActivity; }
@@ -296,20 +318,7 @@ int SubscriptionToolBackend::secondarySecondsUntilReset() const
 
 QString SubscriptionToolBackend::secondaryTimeUntilReset() const
 {
-    int secs = secondarySecondsUntilReset();
-    if (secs <= 0) return QStringLiteral("now");
-
-    int hours = secs / 3600;
-    int mins = (secs % 3600) / 60;
-
-    if (hours > 24) {
-        int days = hours / 24;
-        return QStringLiteral("%1d %2h").arg(days).arg(hours % 24);
-    }
-    if (hours > 0) {
-        return QStringLiteral("%1h %2m").arg(hours).arg(mins);
-    }
-    return QStringLiteral("%1m").arg(mins);
+    return formatDuration(secondarySecondsUntilReset());
 }
 
 // --- Pace ---
@@ -338,6 +347,28 @@ double SubscriptionToolBackend::projectedPercentAtReset(double usedPercent, cons
     const qint64 elapsed = std::max(activeSecondsBetween(windowStart, std::min(now, windowEnd)),
                                     std::min(kMinActiveElapsedSecs, total));
     return usedPercent * static_cast<double>(total) / static_cast<double>(elapsed);
+}
+
+qint64 SubscriptionToolBackend::secondsUntilExhausted(double usedPercent, const QDateTime &windowStart,
+                                                      const QDateTime &windowEnd, const QDateTime &now)
+{
+    if (usedPercent >= 100.0) return 0;
+    if (usedPercent <= 0.0 || now >= windowEnd) return -1;
+    const qint64 total = activeSecondsBetween(windowStart, windowEnd);
+    if (total <= 0) return -1;
+    const qint64 elapsed = std::max(activeSecondsBetween(windowStart, now),
+                                    std::min(kMinActiveElapsedSecs, total));
+    // Active seconds left at the current burn rate before usage reaches 100%.
+    const double needed = (100.0 - usedPercent) * static_cast<double>(elapsed) / usedPercent;
+    if (needed >= static_cast<double>(activeSecondsBetween(now, windowEnd))) return -1;
+    const QDateTime runsOut = addActiveSeconds(now, static_cast<qint64>(std::ceil(needed)));
+    if (!runsOut.isValid() || runsOut >= windowEnd) return -1;
+    return now.secsTo(runsOut);
+}
+
+QString SubscriptionToolBackend::timeUntilExhaustedText(qint64 secs)
+{
+    return secs < 0 ? QString() : formatDuration(secs);
 }
 
 SubscriptionToolBackend::PaceLevel SubscriptionToolBackend::paceLevelFor(double projectedPercent)
@@ -371,6 +402,20 @@ int SubscriptionToolBackend::secondaryPaceLevel() const
 {
     if (!hasSecondaryLimit() || secondaryPeriodType() != Weekly) return PaceNone;
     return paceLevelFor(secondaryProjectedPercent());
+}
+
+QString SubscriptionToolBackend::timeUntilExhausted() const
+{
+    if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return QString();
+    return timeUntilExhaustedText(secondsUntilExhausted(percentUsed(), m_periodStart, periodEnd(),
+                                                        QDateTime::currentDateTimeUtc()));
+}
+
+QString SubscriptionToolBackend::secondaryTimeUntilExhausted() const
+{
+    if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0 || secondaryPeriodType() != Weekly) return QString();
+    return timeUntilExhaustedText(secondsUntilExhausted(secondaryPercentUsed(), m_secondaryPeriodStart,
+                                                        secondaryPeriodEnd(), QDateTime::currentDateTimeUtc()));
 }
 
 // --- Claude.ai usage ---
@@ -508,7 +553,11 @@ QVariantList SubscriptionToolBackend::scopedLimits() const
         const double projected = resetsAt.isValid()
             ? projectedPercentAtReset(percent, resetsAt.addDays(-7), resetsAt, now)
             : percent;
+        const qint64 exhausted = resetsAt.isValid()
+            ? secondsUntilExhausted(percent, resetsAt.addDays(-7), resetsAt, now)
+            : -1;
         limit.insert(QStringLiteral("projectedPercent"), projected);
+        limit.insert(QStringLiteral("timeUntilExhausted"), timeUntilExhaustedText(exhausted));
         limit.insert(QStringLiteral("paceLevel"), static_cast<int>(paceLevelFor(projected)));
         withPace.append(limit);
     }

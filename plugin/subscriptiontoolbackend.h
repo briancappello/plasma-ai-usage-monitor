@@ -71,6 +71,10 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(int paceLevel READ paceLevel NOTIFY paceUpdated)
     Q_PROPERTY(double secondaryProjectedPercent READ secondaryProjectedPercent NOTIFY paceUpdated)
     Q_PROPERTY(int secondaryPaceLevel READ secondaryPaceLevel NOTIFY paceUpdated)
+    // Time from now until the weekly window hits 100% at that same burn rate;
+    // empty when it won't run out before the reset, "now" once it has.
+    Q_PROPERTY(QString timeUntilExhausted READ timeUntilExhausted NOTIFY paceUpdated)
+    Q_PROPERTY(QString secondaryTimeUntilExhausted READ secondaryTimeUntilExhausted NOTIFY paceUpdated)
 
     // Extra / metered usage (e.g., Claude extra spending, Copilot metered)
     Q_PROPERTY(bool hasExtraUsage READ hasExtraUsage NOTIFY usageUpdated)
@@ -101,7 +105,7 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(bool hasCredits READ hasCredits NOTIFY usageUpdated)
 
     // Per-model scoped weekly limits (e.g., Claude's "Fable"). Variable length;
-    // each entry is a map { name, percent, resetsAt, projectedPercent, paceLevel }.
+    // each entry is a map { name, percent, resetsAt, projectedPercent, timeUntilExhausted, paceLevel }.
     // Empty for tools that don't report them.
     Q_PROPERTY(QVariantList scopedLimits READ scopedLimits NOTIFY paceUpdated)
 
@@ -171,12 +175,19 @@ public:
     int paceLevel() const;
     double secondaryProjectedPercent() const;
     int secondaryPaceLevel() const;
+    QString timeUntilExhausted() const;
+    QString secondaryTimeUntilExhausted() const;
 
     // Seconds of "active" time (06:00–22:00 America/Denver, every day) in [from, to).
     static qint64 activeSecondsBetween(const QDateTime &from, const QDateTime &to);
     // usedPercent extrapolated to windowEnd at the current active-hours burn rate.
     static double projectedPercentAtReset(double usedPercent, const QDateTime &windowStart,
                                           const QDateTime &windowEnd, const QDateTime &now);
+    // Wall-clock seconds from now until usedPercent reaches 100% at the current
+    // active-hours burn rate: 0 if already there, -1 if not before windowEnd.
+    static qint64 secondsUntilExhausted(double usedPercent, const QDateTime &windowStart,
+                                        const QDateTime &windowEnd, const QDateTime &now);
+    static QString timeUntilExhaustedText(qint64 secs);
     static PaceLevel paceLevelFor(double projectedPercent);
 
     // Extra / metered usage

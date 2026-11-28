@@ -285,7 +285,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     PlasmaComponents.Label {
                         text: (toolCard.monitor?.paceLevel ?? -1) >= 0
-                            ? paceText(toolCard.monitor?.percentUsed ?? 0, toolCard.monitor?.projectedPercent ?? 0)
+                            ? paceText(toolCard.monitor?.percentUsed ?? 0, toolCard.monitor?.timeUntilExhausted ?? "")
                             : Math.round(toolCard.monitor?.percentUsed ?? 0) + "% " + i18n("used")
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         opacity: 0.5
@@ -351,7 +351,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     PlasmaComponents.Label {
                         text: paceText(toolCard.monitor?.secondaryPercentUsed ?? 0,
-                                       toolCard.monitor?.secondaryProjectedPercent ?? 0)
+                                       toolCard.monitor?.secondaryTimeUntilExhausted ?? "")
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         opacity: 0.4
                         color: paceColor(toolCard.monitor?.secondaryPaceLevel ?? 0)
@@ -418,7 +418,7 @@ ColumnLayout {
                         }
 
                         PlasmaComponents.Label {
-                            text: paceText(modelData.percent ?? 0, modelData.projectedPercent ?? 0)
+                            text: paceText(modelData.percent ?? 0, modelData.timeUntilExhausted ?? "")
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             opacity: 0.4
                             color: paceColor(modelData.paceLevel ?? 0)
@@ -796,10 +796,15 @@ ColumnLayout {
         return paceLevel >= 0 ? paceColor(paceLevel) : usageColor(percent);
     }
 
-    function paceText(usedPercent, projectedPercent) {
+    // timeUntilExhausted is empty when the window lasts until its reset.
+    function paceText(usedPercent, timeUntilExhausted) {
         if (usedPercent <= 0)
             return i18n("%1% used", 0);
-        return i18n("%1% used · on pace for %2%", Math.round(usedPercent), Math.round(projectedPercent));
+        if (usedPercent >= 100)
+            return i18n("%1% used · limit reached", Math.round(usedPercent));
+        if (!timeUntilExhausted)
+            return i18n("%1% used · lasts until reset", Math.round(usedPercent));
+        return i18n("%1% used · runs out in %2", Math.round(usedPercent), timeUntilExhausted);
     }
 
     function formatRelativeTime(dateTime) {
