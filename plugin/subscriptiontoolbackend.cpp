@@ -404,18 +404,28 @@ int SubscriptionToolBackend::secondaryPaceLevel() const
     return paceLevelFor(secondaryProjectedPercent());
 }
 
+int SubscriptionToolBackend::secondsUntilExhausted() const
+{
+    if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return -1;
+    return static_cast<int>(secondsUntilExhausted(percentUsed(), m_periodStart, periodEnd(),
+                                                  QDateTime::currentDateTimeUtc()));
+}
+
+int SubscriptionToolBackend::secondarySecondsUntilExhausted() const
+{
+    if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0 || secondaryPeriodType() != Weekly) return -1;
+    return static_cast<int>(secondsUntilExhausted(secondaryPercentUsed(), m_secondaryPeriodStart,
+                                                  secondaryPeriodEnd(), QDateTime::currentDateTimeUtc()));
+}
+
 QString SubscriptionToolBackend::timeUntilExhausted() const
 {
-    if (primaryPeriodType() != Weekly || m_usageLimit <= 0) return QString();
-    return timeUntilExhaustedText(secondsUntilExhausted(percentUsed(), m_periodStart, periodEnd(),
-                                                        QDateTime::currentDateTimeUtc()));
+    return timeUntilExhaustedText(secondsUntilExhausted());
 }
 
 QString SubscriptionToolBackend::secondaryTimeUntilExhausted() const
 {
-    if (!hasSecondaryLimit() || m_secondaryUsageLimit <= 0 || secondaryPeriodType() != Weekly) return QString();
-    return timeUntilExhaustedText(secondsUntilExhausted(secondaryPercentUsed(), m_secondaryPeriodStart,
-                                                        secondaryPeriodEnd(), QDateTime::currentDateTimeUtc()));
+    return timeUntilExhaustedText(secondarySecondsUntilExhausted());
 }
 
 // --- Claude.ai usage ---

@@ -192,9 +192,12 @@ void SubscriptionToolBackendTest::testSecondaryPaceProperties()
     QVERIFY(t.secondaryProjectedPercent() >= 100.0);
     QCOMPARE(t.secondaryPaceLevel(), static_cast<int>(SubscriptionToolBackend::PaceCritical));
     QVERIFY(!t.secondaryTimeUntilExhausted().isEmpty());
+    QVERIFY(t.secondarySecondsUntilExhausted() > 0);
+    QVERIFY(t.secondarySecondsUntilExhausted() < t.secondarySecondsUntilReset());
 
     // The 5-hour primary window has no run-out estimate.
     QVERIFY(t.timeUntilExhausted().isEmpty());
+    QCOMPARE(t.secondsUntilExhausted(), -1);
 
     // The 5-hour primary window isn't paced.
     t.setUsageLimit(100);

@@ -72,7 +72,9 @@ class SubscriptionToolBackend : public QObject
     Q_PROPERTY(double secondaryProjectedPercent READ secondaryProjectedPercent NOTIFY paceUpdated)
     Q_PROPERTY(int secondaryPaceLevel READ secondaryPaceLevel NOTIFY paceUpdated)
     // Time from now until the weekly window hits 100% at that same burn rate;
-    // empty when it won't run out before the reset, "now" once it has.
+    // -1 / empty when it won't run out before the reset, 0 / "now" once it has.
+    Q_PROPERTY(int secondsUntilExhausted READ secondsUntilExhausted NOTIFY paceUpdated)
+    Q_PROPERTY(int secondarySecondsUntilExhausted READ secondarySecondsUntilExhausted NOTIFY paceUpdated)
     Q_PROPERTY(QString timeUntilExhausted READ timeUntilExhausted NOTIFY paceUpdated)
     Q_PROPERTY(QString secondaryTimeUntilExhausted READ secondaryTimeUntilExhausted NOTIFY paceUpdated)
 
@@ -175,6 +177,8 @@ public:
     int paceLevel() const;
     double secondaryProjectedPercent() const;
     int secondaryPaceLevel() const;
+    int secondsUntilExhausted() const;
+    int secondarySecondsUntilExhausted() const;
     QString timeUntilExhausted() const;
     QString secondaryTimeUntilExhausted() const;
 

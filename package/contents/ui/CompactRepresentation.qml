@@ -269,12 +269,25 @@ MouseArea {
                 font.family: Kirigami.Theme.defaultFont.family
                 font.pixelSize: chartMode.rowFontPixelSize
                 font.weight: Kirigami.Theme.defaultFont.weight
-                text: chartMode.ccAvailable ? formatCountdown() : i18n("–")
+                // Shrink rather than clip when "run-out / reset" is wider than the panel.
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: 6
+                textFormat: Text.StyledText
+                text: chartMode.ccAvailable ? countdownMarkup() : i18n("–")
+                // Within budget, the reset countdown is green; when the quota will
+                // run out first, only the run-out time takes the bar's color.
+                color: chartMode.ccAvailable && compactRoot.quotaPaceLevel(chartMode.ccMonitor) >= 0
+                       && secondsUntilOut() < 0
+                    ? Kirigami.Theme.positiveTextColor
+                    : Kirigami.Theme.textColor
 
-                function formatCountdown() {
-                    var secs = chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilReset
-                                                      : chartMode.ccMonitor.secondsUntilReset;
-                    if (secs <= 0) return i18n("reset");
+                // -1 when the quota lasts until its reset (or isn't paced).
+                function secondsUntilOut() {
+                    return (chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilExhausted
+                                                   : chartMode.ccMonitor.secondsUntilExhausted) ?? -1;
+                }
+
+                function formatDuration(secs) {
                     var h = Math.floor(secs / 3600);
                     var m = Math.floor((secs % 3600) / 60);
                     var s = secs % 60;
@@ -284,8 +297,33 @@ MouseArea {
                     return (m < 10 ? "0" : "") + m + "m " + (s < 10 ? "0" : "") + s + "s";
                 }
 
+                function formatReset() {
+                    var secs = chartMode.useSecondary ? chartMode.ccMonitor.secondarySecondsUntilReset
+                                                      : chartMode.ccMonitor.secondsUntilReset;
+                    return secs <= 0 ? i18n("reset") : formatDuration(secs);
+                }
+
+                function formatRunOut() {
+                    var out = secondsUntilOut();
+                    if (out < 0) return "";
+                    return out === 0 ? i18n("out") : formatDuration(out);
+                }
+
+                // Plain text: "2d 20h", or "1d 1h / 2d 20h" when it runs out first.
+                function formatCountdown() {
+                    var runOut = formatRunOut();
+                    return runOut ? runOut + " / " + formatReset() : formatReset();
+                }
+
+                function countdownMarkup() {
+                    var runOut = formatRunOut();
+                    if (!runOut) return formatReset();
+                    var barColor = Utils.paceColor(compactRoot.quotaPaceLevel(chartMode.ccMonitor), Kirigami.Theme);
+                    return "<font color=\"" + barColor + "\">" + runOut + "</font> / " + formatReset();
+                }
+
                 function updateText() {
-                    text = chartMode.ccAvailable ? formatCountdown() : i18n("–");
+                    text = chartMode.ccAvailable ? countdownMarkup() : i18n("–");
                 }
 
                 Connections {

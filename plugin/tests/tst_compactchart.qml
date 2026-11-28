@@ -40,6 +40,8 @@ Item {
         property var scopedLimits: [{ name: "Fable", percent: 12, paceLevel: 0 }]
         property int secondsUntilReset: 6 * 86400 + 2 * 3600
         property int secondarySecondsUntilReset: 0
+        property int secondsUntilExhausted: -1
+        property int secondarySecondsUntilExhausted: -1
         property bool limitReached: false
         signal usageUpdated()
     }
@@ -63,6 +65,8 @@ Item {
         property var scopedLimits: []
         property int secondsUntilReset: 3600
         property int secondarySecondsUntilReset: 86400
+        property int secondsUntilExhausted: -1
+        property int secondarySecondsUntilExhausted: -1
         property bool limitReached: false
         signal usageUpdated()
     }
@@ -113,6 +117,26 @@ Item {
             compare(countdown.formatCountdown(), "6d 2h");
             compare(quota.fillColor, Kirigami.Theme.positiveTextColor);
             compare(scoped.fillColor, Kirigami.Theme.positiveTextColor);
+            // Within budget: just the reset countdown, in green.
+            compare(countdownRow.color, Kirigami.Theme.positiveTextColor);
+
+            // On pace to run out first: "run-out / reset", the run-out time in the bar's color.
+            monitor.paceLevel = 2;
+            monitor.secondsUntilExhausted = 86400 + 3600;
+            countdown.updateText();
+            compare(countdown.formatCountdown(), "1d 1h / 6d 2h");
+            compare(countdownRow.color, Kirigami.Theme.textColor);
+            verify(countdownRow.text.indexOf(String(Kirigami.Theme.negativeTextColor)) >= 0);
+            monitor.secondsUntilExhausted = 45 * 60;
+            compare(countdown.formatCountdown(), "45m 00s / 6d 2h");
+            monitor.secondsUntilExhausted = 0;
+            compare(countdown.formatCountdown(), "out / 6d 2h");
+            // The text shrinks to fit rather than running past the panel's edge.
+            countdown.updateText();
+            verify(countdownRow.contentWidth <= countdownRow.width + 1);
+            monitor.secondsUntilExhausted = -1;
+            monitor.paceLevel = 0;
+            countdown.updateText();
 
             // Each bar is labelled with its window's initial, sized to the bar
             // and the same width so both tracks line up.
@@ -178,8 +202,10 @@ Item {
             compare(quota.pct, 0.23);
             compare(countdown.formatCountdown(), "1h 00m");
             compare(quota.letter, "5");
-            // The 5-hour window isn't paced: it's colored by how much is used.
+            // The 5-hour window isn't paced: it's colored by how much is used,
+            // and its countdown keeps the plain text color.
             compare(quota.paceLevel, -1);
+            compare(named("countdownRow").color, Kirigami.Theme.textColor);
             secondMonitor.percentUsed = 81;
             compare(quota.fillColor, Kirigami.Theme.neutralTextColor);
             compare(compact.hasWarning, true);
