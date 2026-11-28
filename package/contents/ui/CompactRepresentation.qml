@@ -319,7 +319,14 @@ MouseArea {
                     var runOut = formatRunOut();
                     if (!runOut) return formatReset();
                     var barColor = Utils.paceColor(compactRoot.quotaPaceLevel(chartMode.ccMonitor), Kirigami.Theme);
-                    return "<font color=\"" + barColor + "\">" + runOut + "</font> / " + formatReset();
+                    return "<font color=\"" + readableOnPanel(barColor) + "\">" + runOut + "</font> / " + formatReset();
+                }
+
+                // Thin glyphs blend into a dark panel and read darker than the solid
+                // bar, so on dark themes the bar color is brightened for text.
+                function readableOnPanel(c) {
+                    return Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.textColor) === Kirigami.ColorUtils.Light
+                        ? Qt.lighter(c, 1.35) : c;
                 }
 
                 function updateText() {

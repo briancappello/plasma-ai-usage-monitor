@@ -126,7 +126,14 @@ Item {
             countdown.updateText();
             compare(countdown.formatCountdown(), "1d 1h / 6d 2h");
             compare(countdownRow.color, Kirigami.Theme.textColor);
-            verify(countdownRow.text.indexOf(String(Kirigami.Theme.negativeTextColor)) >= 0);
+            verify(countdownRow.text.indexOf(String(countdown.readableOnPanel(Kirigami.Theme.negativeTextColor))) >= 0);
+            // Dark panels get a brighter text shade than the bar; light panels keep the bar's.
+            var dark = Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.textColor) === Kirigami.ColorUtils.Light;
+            var textRed = countdown.readableOnPanel(Kirigami.Theme.negativeTextColor);
+            if (dark)
+                verify(textRed.hslLightness > Kirigami.Theme.negativeTextColor.hslLightness);
+            else
+                compare(textRed, Kirigami.Theme.negativeTextColor);
             monitor.secondsUntilExhausted = 45 * 60;
             compare(countdown.formatCountdown(), "45m 00s / 6d 2h");
             monitor.secondsUntilExhausted = 0;
